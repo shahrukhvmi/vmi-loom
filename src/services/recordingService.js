@@ -1,131 +1,134 @@
-/**
- * Recording Service
- *
- * Low-level helpers for MediaRecorder lifecycle, stream combination,
- * and canvas-based compositing (screen + camera overlay).
- */
+import { MIME_TYPES } from "../constants";
+import { getSupportedMimeType } from "../utils";
 
-import { MIME_TYPES } from '../constants';
-import { getSupportedMimeType } from '../utils';
-
-/**
- * Create a MediaRecorder from the given stream with the best
- * supported MIME type.
- */
 export function createMediaRecorder(stream, onDataAvailable, onStop) {
   const mimeType = getSupportedMimeType(MIME_TYPES);
   const options = mimeType ? { mimeType } : {};
-
   const recorder = new MediaRecorder(stream, options);
-
   recorder.ondataavailable = (e) => {
     if (e.data && e.data.size > 0) onDataAvailable(e.data);
   };
-
   recorder.onstop = onStop;
-
   return recorder;
 }
 
-/**
- * Wait for a video element to have enough data to draw a real frame.
- * Resolves immediately if already ready.
- */
 function waitForVideoReady(videoEl) {
   return new Promise((resolve) => {
-    // readyState >= 2 means HAVE_CURRENT_DATA — a frame is available
     if (videoEl.readyState >= 2) {
       resolve();
       return;
     }
     const onReady = () => {
-      videoEl.removeEventListener('loadeddata', onReady);
-      videoEl.removeEventListener('canplay', onReady);
+      videoEl.removeEventListener("loadeddata", onReady);
+      videoEl.removeEventListener("canplay", onReady);
       resolve();
     };
-    videoEl.addEventListener('loadeddata', onReady);
-    videoEl.addEventListener('canplay', onReady);
-
-    // Safety timeout — proceed anyway after 3s
+    videoEl.addEventListener("loadeddata", onReady);
+    videoEl.addEventListener("canplay", onReady);
     setTimeout(resolve, 3000);
   });
 }
 
-/**
- * Combine a screen stream and a camera stream using Canvas API.
- * The camera feed is drawn as a PiP overlay in the bottom-right corner.
- *
- * FIX: wait for both video elements to have frames before sizing canvas,
- * use native screen resolution instead of hardcoded fallback,
- * and mirror the camera correctly without canvas transform.
- */
 export async function createCompositeStream(
   screenStream,
   cameraStream,
   audioStream,
-  options = {}
+  options = {},
 ) {
-  const { overlayWidth = 240, overlayHeight = 180 } = options;
+  const { overlayWidth = 560, overlayHeight = 420 } = options;
 
-  // ── Screen video ─────────────────────────────────────────────────────────
-  const screenVideo = document.createElement('video');
+  // ── Screen video ──────────────────────────────────────────────────────────
+  const screenVideo = document.createElement("video");
   screenVideo.srcObject = screenStream;
   screenVideo.muted = true;
   screenVideo.playsInline = true;
+  screenVideo.autoplay = true;
+  Object.assign(screenVideo.style, {
+    position: "fixed",
+    top: "-2px",
+    left: "-2px",
+    width: "1px",
+    height: "1px",
+    opacity: "0.01", // not 0 — some browsers throttle opacity:0 elements
+    pointerEvents: "none",
+    zIndex: "-999",
+  });
+  document.body.appendChild(screenVideo);
   await screenVideo.play();
   await waitForVideoReady(screenVideo);
 
-  // Use actual video dimensions — don't rely on getSettings() which can lag
-  const canvasWidth  = screenVideo.videoWidth  || 1920;
+  const canvasWidth = screenVideo.videoWidth || 1920;
   const canvasHeight = screenVideo.videoHeight || 1080;
 
-  // ── Camera video ─────────────────────────────────────────────────────────
-  const cameraVideo = document.createElement('video');
+  // ── Camera video ──────────────────────────────────────────────────────────
+  const cameraVideo = document.createElement("video");
   cameraVideo.srcObject = cameraStream;
   cameraVideo.muted = true;
   cameraVideo.playsInline = true;
+  cameraVideo.autoplay = true;
+  Object.assign(cameraVideo.style, {
+    position: "fixed",
+    top: "-2px",
+    left: "-2px",
+    width: "1px",
+    height: "1px",
+    opacity: "0.01",
+    pointerEvents: "none",
+    zIndex: "-999",
+  });
+  document.body.appendChild(cameraVideo);
   await cameraVideo.play();
   await waitForVideoReady(cameraVideo);
 
+  console.log(
+    "[composite] screen:",
+    canvasWidth,
+    "x",
+    canvasHeight,
+    "| camera:",
+    cameraVideo.videoWidth,
+    "x",
+    cameraVideo.videoHeight,
+    "| cam paused:",
+    cameraVideo.paused,
+    "| cam active:",
+    cameraStream.active,
+  );
+
   // ── Canvas ────────────────────────────────────────────────────────────────
-  const canvas = document.createElement('canvas');
-  canvas.width  = canvasWidth;
+  const canvas = document.createElement("canvas");
+  canvas.width = canvasWidth;
   canvas.height = canvasHeight;
-  const ctx = canvas.getContext('2d', { alpha: false });
+  const ctx = canvas.getContext("2d", { alpha: false });
 
   let animFrameId;
+  let running = true;
 
   function draw() {
-    // Draw full screen
+    if (!running) return;
+
     ctx.drawImage(screenVideo, 0, 0, canvasWidth, canvasHeight);
 
-    // Camera PiP — bottom-right corner
-    const pad    = 28;
-    const x      = canvasWidth  - overlayWidth  - pad;
-    const y      = canvasHeight - overlayHeight - pad;
+    const pad = 28;
+    const x = canvasWidth - overlayWidth - pad;
+    const y = canvasHeight - overlayHeight - pad;
     const radius = 20;
 
-    // Shadow under camera bubble
     ctx.save();
-    ctx.shadowColor = 'rgba(0,0,0,0.55)';
-    ctx.shadowBlur  = 20;
+    ctx.shadowColor = "rgba(0,0,0,0.55)";
+    ctx.shadowBlur = 20;
     ctx.shadowOffsetY = 4;
-
-    // Clip to rounded rect
     ctx.beginPath();
     ctx.roundRect(x, y, overlayWidth, overlayHeight, radius);
     ctx.clip();
-    ctx.shadowColor = 'transparent'; // don't shadow the video itself
-
-    // Mirror camera horizontally (selfie-style)
+    ctx.shadowColor = "transparent";
     ctx.translate(x + overlayWidth, y);
     ctx.scale(-1, 1);
     ctx.drawImage(cameraVideo, 0, 0, overlayWidth, overlayHeight);
     ctx.restore();
 
-    // Border ring
     ctx.save();
-    ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+    ctx.strokeStyle = "rgba(255,255,255,0.22)";
     ctx.lineWidth = 2.5;
     ctx.beginPath();
     ctx.roundRect(x, y, overlayWidth, overlayHeight, radius);
@@ -137,41 +140,45 @@ export async function createCompositeStream(
 
   draw();
 
-  // ── Capture canvas stream at native fps ───────────────────────────────────
-  // Use 0 to let browser choose optimal fps (avoids artificial cap)
-  const canvasStream = canvas.captureStream(0);
+  const canvasStream = canvas.captureStream(30);
 
-  // Add audio — mic takes priority, then system audio from screen
   const audioTracks = [
-    ...(audioStream?.getAudioTracks()  || []),
+    ...(audioStream?.getAudioTracks() || []),
     ...screenStream.getAudioTracks(),
   ];
   audioTracks.forEach((t) => canvasStream.addTrack(t));
 
+  // FIX: cleanup owns stopping the streams — NOT the caller (useRecorder/finalizeRecording)
+  // This prevents camera being killed mid-recording when streams are cleaned up
   const cleanup = () => {
+    running = false;
     cancelAnimationFrame(animFrameId);
+
+    // Detach srcObject BEFORE stopping tracks
+    screenVideo.pause();
+    cameraVideo.pause();
     screenVideo.srcObject = null;
     cameraVideo.srcObject = null;
+
+    // Remove from DOM
+    screenVideo.remove();
+    cameraVideo.remove();
+
+    // NOW stop tracks — after detaching so canvas draw loop is already dead
+    screenStream.getTracks().forEach((t) => t.stop());
+    cameraStream.getTracks().forEach((t) => t.stop());
+    if (audioStream) audioStream.getTracks().forEach((t) => t.stop());
   };
 
   return { combinedStream: canvasStream, cleanup };
 }
 
-/**
- * Capture a screenshot from a MediaStream or HTMLVideoElement.
- *
- * FIX: was drawing immediately after .play() before any frames arrived,
- * producing a blank/black image. Now waits for readyState >= 2.
- *
- * @param {MediaStream|HTMLVideoElement} source
- * @returns {Promise<Blob>} PNG blob
- */
 export async function captureScreenshot(source) {
   let videoEl;
   let shouldCleanup = false;
 
   if (source instanceof MediaStream) {
-    videoEl = document.createElement('video');
+    videoEl = document.createElement("video");
     videoEl.srcObject = source;
     videoEl.muted = true;
     videoEl.playsInline = true;
@@ -181,18 +188,14 @@ export async function captureScreenshot(source) {
     videoEl = source;
   }
 
-  // Wait until a real frame is available
   await waitForVideoReady(videoEl);
 
-  const width  = videoEl.videoWidth  || 1280;
+  const width = videoEl.videoWidth || 1280;
   const height = videoEl.videoHeight || 720;
-
-  const canvas = document.createElement('canvas');
-  canvas.width  = width;
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
   canvas.height = height;
-
-  const ctx = canvas.getContext('2d');
-  ctx.drawImage(videoEl, 0, 0, width, height);
+  canvas.getContext("2d").drawImage(videoEl, 0, 0, width, height);
 
   if (shouldCleanup) {
     videoEl.pause();
@@ -200,9 +203,10 @@ export async function captureScreenshot(source) {
   }
 
   return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => {
-      if (blob) resolve(blob);
-      else reject(new Error('Failed to capture screenshot — canvas toBlob returned null'));
-    }, 'image/png');
+    canvas.toBlob(
+      (blob) =>
+        blob ? resolve(blob) : reject(new Error("toBlob returned null")),
+      "image/png",
+    );
   });
 }

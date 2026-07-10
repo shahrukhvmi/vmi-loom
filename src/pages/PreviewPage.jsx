@@ -3,7 +3,7 @@ import {
   Download, Trash2, ArrowLeft, MoreVertical,
   Link2, Lock, MessageCircle, Send,
   Play, Pause, Volume2, VolumeX, Maximize,
-  Monitor, Camera, Layers, Check, Upload, Loader2,
+  Check, Upload, Loader2,
   ImageIcon, Clock, Edit3
 } from 'lucide-react';
 import { useRecorderStore } from '../context/recorderStore';
@@ -18,7 +18,9 @@ const MODE_LABEL = {
   [RECORDING_MODE.SCREEN_CAMERA]: 'Screen + Camera',
 };
 
-/* ── Inline video player ── */
+/* ══════════════════════════════════════════════════════════════
+   Inline Video Player — Loom-style
+   ══════════════════════════════════════════════════════════════ */
 function InlinePlayer({ src, onTimeUpdate }) {
   const videoRef  = useRef(null);
   const trackRef  = useRef(null);
@@ -26,7 +28,6 @@ function InlinePlayer({ src, onTimeUpdate }) {
   const [playing,  setPlaying]  = useState(false);
   const [current,  setCurrent]  = useState(0);
   const [duration, setDuration] = useState(0);
-  const [vol,      setVol]      = useState(1);
   const [muted,    setMuted]    = useState(false);
   const [ctrlVis,  setCtrlVis]  = useState(true);
 
@@ -40,7 +41,7 @@ function InlinePlayer({ src, onTimeUpdate }) {
   const showCtrl = useCallback(() => {
     setCtrlVis(true);
     clearTimeout(hideTimer.current);
-    hideTimer.current = setTimeout(() => setCtrlVis(false), 2800);
+    hideTimer.current = setTimeout(() => setCtrlVis(false), 3000);
   }, []);
 
   const toggle = () => {
@@ -61,55 +62,60 @@ function InlinePlayer({ src, onTimeUpdate }) {
   const pct = duration > 0 ? (current / duration) * 100 : 0;
 
   return (
-    <div className="relative bg-black rounded-2xl overflow-hidden" style={{ aspectRatio:'16/9' }}
+    <div className="relative bg-black overflow-hidden" style={{ aspectRatio: '16/9', borderRadius: 'var(--radius-lg)' }}
       onMouseMove={showCtrl} onMouseLeave={() => playing && setCtrlVis(false)}>
       <video ref={videoRef} className="w-full h-full object-contain" onClick={toggle}
-        onTimeUpdate={() => { const t = videoRef.current?.currentTime||0; setCurrent(t); onTimeUpdate?.(t); }}
-        onDurationChange={() => setDuration(videoRef.current?.duration||0)}
+        onTimeUpdate={() => { const t = videoRef.current?.currentTime || 0; setCurrent(t); onTimeUpdate?.(t); }}
+        onDurationChange={() => setDuration(videoRef.current?.duration || 0)}
         onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)}
-        onEnded={() => { setPlaying(false); setCurrent(0); setCtrlVis(true); if(videoRef.current) videoRef.current.currentTime=0; }}
+        onEnded={() => { setPlaying(false); setCurrent(0); setCtrlVis(true); if (videoRef.current) videoRef.current.currentTime = 0; }}
         playsInline />
 
-      {/* Center play */}
+      {/* Center play button */}
       {!playing && (
         <button onClick={toggle} className="absolute inset-0 flex items-center justify-center group/play">
-          <div className="w-16 h-16 rounded-full bg-white/10 border border-white/20 backdrop-blur-sm
-            flex items-center justify-center transition-all group-hover/play:bg-white/18 group-hover/play:scale-105 active:scale-95">
-            <Play size={22} className="text-white ml-1" fill="currentColor" />
+          <div className="w-[72px] h-[72px] rounded-full bg-white/10 border border-white/20 backdrop-blur-sm
+            flex items-center justify-center transition-all duration-200
+            group-hover/play:bg-white/20 group-hover/play:scale-105 active:scale-95">
+            <Play size={26} className="text-white ml-1" fill="currentColor" />
           </div>
         </button>
       )}
 
-      {/* Controls */}
-      <div className={`absolute bottom-0 inset-x-0 transition-all duration-300 ${ctrlVis||!playing?'opacity-100':'opacity-0 pointer-events-none'}`}>
-        <div className="bg-gradient-to-t from-black via-black/60 to-transparent pt-12 pb-4 px-4">
+      {/* Controls overlay */}
+      <div className={`absolute bottom-0 inset-x-0 transition-all duration-300
+        ${ctrlVis || !playing ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+        <div className="bg-gradient-to-t from-black/90 via-black/50 to-transparent pt-14 pb-5 px-5">
+          {/* Seek bar */}
           <div ref={trackRef} onClick={seek}
-            className="h-[3px] bg-white/20 rounded-full cursor-pointer mb-3.5 group/seek">
-            <div className="h-full bg-white rounded-full relative" style={{ width:`${pct}%` }}>
-              <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-white
-                opacity-0 group-hover/seek:opacity-100 transition-opacity shadow" />
+            className="h-[3px] bg-white/20 rounded-full cursor-pointer mb-4 group/seek">
+            <div className="h-full bg-white rounded-full relative transition-all" style={{ width: `${pct}%` }}>
+              <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full bg-white
+                opacity-0 group-hover/seek:opacity-100 transition-opacity shadow-md" />
             </div>
           </div>
+
           <div className="flex items-center gap-3">
             <button onClick={toggle} className="text-white/80 hover:text-white transition-colors">
-              {playing ? <Pause size={17} /> : <Play size={17} fill="currentColor" />}
+              {playing ? <Pause size={18} /> : <Play size={18} fill="currentColor" />}
             </button>
             <span className="text-[12px] text-white/50 font-mono tabular-nums">
               {formatDuration(current)} / {formatDuration(duration)}
             </span>
-            <button onClick={() => { const m=!muted; setMuted(m); if(videoRef.current) videoRef.current.muted=m; }}
+            <button onClick={() => { const m = !muted; setMuted(m); if (videoRef.current) videoRef.current.muted = m; }}
               className="text-white/40 hover:text-white/80 transition-colors">
-              {muted||vol===0 ? <VolumeX size={16}/> : <Volume2 size={16}/>}
+              {muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
             </button>
             <div className="flex-1" />
-            <select className="bg-white/10 text-white/60 text-[12px] rounded-md px-2 py-1 border-0 outline-none cursor-pointer"
-              onChange={e => { if(videoRef.current) videoRef.current.playbackRate=parseFloat(e.target.value); }}>
+            <select className="text-white/60 text-[12px] rounded-[8px] px-2.5 py-1.5 cursor-pointer"
+              style={{ background: 'rgba(255,255,255,.1)', border: 'none', outline: 'none' }}
+              onChange={e => { if (videoRef.current) videoRef.current.playbackRate = parseFloat(e.target.value); }}>
               <option value="1">1x</option><option value="1.25">1.25x</option>
               <option value="1.5">1.5x</option><option value="2">2x</option>
             </select>
-            <button onClick={() => { if(document.fullscreenElement) document.exitFullscreen(); else videoRef.current?.requestFullscreen?.(); }}
+            <button onClick={() => { if (document.fullscreenElement) document.exitFullscreen(); else videoRef.current?.requestFullscreen?.(); }}
               className="text-white/40 hover:text-white/80 transition-colors">
-              <Maximize size={16}/>
+              <Maximize size={16} />
             </button>
           </div>
         </div>
@@ -118,53 +124,71 @@ function InlinePlayer({ src, onTimeUpdate }) {
   );
 }
 
-/* ── Comments sidebar ── */
+
+/* ══════════════════════════════════════════════════════════════
+   Comments Sidebar
+   ══════════════════════════════════════════════════════════════ */
 function CommentsSidebar({ currentTime }) {
   const [text, setText] = useState('');
   const [comments, setComments] = useState([]);
+
   const send = () => {
     if (!text.trim()) return;
     setComments(c => [...c, { id: Date.now(), name: 'You', time: Math.floor(currentTime), text: text.trim() }]);
     setText('');
   };
+
   return (
     <aside className="flex flex-col h-full min-h-0">
-      <div className="flex items-center gap-2.5 px-5 py-4 border-b border-[var(--border)] shrink-0">
-        <MessageCircle size={16} className="text-[var(--text-3)]" />
-        <span className="text-[15px] font-semibold text-[var(--text-1)]">Comments</span>
+      {/* Header */}
+      <div className="flex items-center gap-2.5 px-6 py-5 shrink-0"
+        style={{ borderBottom: '1px solid var(--border)' }}>
+        <MessageCircle size={16} style={{ color: 'var(--text-3)' }} />
+        <span className="text-[15px] font-semibold" style={{ color: 'var(--text-1)' }}>Comments</span>
       </div>
-      <div className="px-4 py-3 border-b border-[var(--border)] shrink-0">
-        <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-soft)] p-3
-          focus-within:border-[var(--purple-border)] focus-within:bg-white transition-colors">
-          <textarea value={text} onChange={e=>setText(e.target.value)} rows={3}
-            onKeyDown={e => { if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)) send(); }}
+
+      {/* Compose */}
+      <div className="px-5 py-4 shrink-0" style={{ borderBottom: '1px solid var(--border)' }}>
+        <div className="rounded-[14px] p-3.5 transition-colors"
+          style={{ border: '1px solid var(--border)', background: 'var(--bg-soft)' }}
+          onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--purple-border)'; e.currentTarget.style.background = 'white'; }}
+          onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = 'var(--bg-soft)'; }}>
+          <textarea value={text} onChange={e => setText(e.target.value)} rows={3}
+            onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) send(); }}
             placeholder={`Leave a comment at ${formatDuration(currentTime)}…`}
-            className="w-full bg-transparent text-[13px] text-[var(--text-1)] placeholder:text-[var(--text-3)]
-              resize-none outline-none leading-relaxed" />
-          <div className="flex items-center justify-between mt-2">
-            <span className="text-[12px] text-[var(--purple)] font-medium">
+            className="w-full bg-transparent text-[13px] placeholder:opacity-50
+              resize-none outline-none leading-relaxed"
+            style={{ color: 'var(--text-1)' }} />
+          <div className="flex items-center justify-between mt-2.5">
+            <span className="text-[12px] font-medium" style={{ color: 'var(--purple)' }}>
               Timestamp: {formatDuration(currentTime)}
             </span>
             <button onClick={send} disabled={!text.trim()}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold
-                bg-[var(--text-1)] hover:bg-[#1a1a2e] text-white disabled:opacity-40 disabled:pointer-events-none
-                transition-all active:scale-95">
+              className="pill-btn text-[12px] font-semibold px-3.5 py-1.5
+                disabled:opacity-40 disabled:pointer-events-none"
+              style={{ background: 'var(--text-1)', color: 'white' }}>
               <Send size={11} /> Send
             </button>
           </div>
         </div>
       </div>
-      <div className="flex-1 overflow-y-auto px-4 divide-y divide-[var(--border)]">
+
+      {/* Comments list */}
+      <div className="flex-1 overflow-y-auto px-5">
         {comments.length === 0 && (
-          <p className="text-[12px] text-[var(--text-3)] text-center py-8">No comments yet.</p>
+          <p className="text-[12px] text-center py-10" style={{ color: 'var(--text-3)' }}>
+            No comments yet.
+          </p>
         )}
         {comments.map(c => (
-          <div key={c.id} className="py-4">
-            <div className="flex justify-between items-baseline mb-1.5">
-              <span className="text-[13px] font-semibold text-[var(--text-1)]">{c.name}</span>
-              <span className="text-[12px] text-[var(--text-3)] font-mono tabular-nums">{formatDuration(c.time)}</span>
+          <div key={c.id} className="py-4" style={{ borderBottom: '1px solid var(--border)' }}>
+            <div className="flex justify-between items-baseline mb-2">
+              <span className="text-[13px] font-semibold" style={{ color: 'var(--text-1)' }}>{c.name}</span>
+              <span className="text-[12px] font-mono tabular-nums" style={{ color: 'var(--text-3)' }}>
+                {formatDuration(c.time)}
+              </span>
             </div>
-            <p className="text-[13px] text-[var(--text-2)] leading-relaxed">{c.text}</p>
+            <p className="text-[13px] leading-relaxed" style={{ color: 'var(--text-2)' }}>{c.text}</p>
           </div>
         ))}
       </div>
@@ -172,24 +196,27 @@ function CommentsSidebar({ currentTime }) {
   );
 }
 
-/* ── Screenshots panel in sidebar ── */
+
+/* ══════════════════════════════════════════════════════════════
+   Screenshots Panel (sidebar bottom)
+   ══════════════════════════════════════════════════════════════ */
 function ScreenshotsPanel() {
-  const { screenshots, removeScreenshot, openScreenshotPreview } = useRecorderStore();
-  const { downloadScreenshot } = useScreenshot();
+  const { screenshots, openScreenshotPreview } = useRecorderStore();
   if (!screenshots.length) return null;
   return (
-    <div className="border-t border-[var(--border)] px-4 py-4 shrink-0">
-      <div className="flex items-center gap-2 mb-3">
-        <ImageIcon size={13} className="text-[var(--text-3)]" />
-        <span className="text-[11px] font-semibold text-[var(--text-3)] uppercase tracking-wider">
+    <div className="px-5 py-5 shrink-0" style={{ borderTop: '1px solid var(--border)' }}>
+      <div className="flex items-center gap-2 mb-3.5">
+        <ImageIcon size={13} style={{ color: 'var(--text-3)' }} />
+        <span className="text-[11px] font-semibold uppercase tracking-[0.08em]"
+          style={{ color: 'var(--text-3)' }}>
           Screenshots ({screenshots.length})
         </span>
       </div>
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-2 gap-2.5">
         {screenshots.map(shot => (
           <button key={shot.id} onClick={() => openScreenshotPreview(shot.id)}
-            className="group relative rounded-xl overflow-hidden border border-[var(--border)]
-              bg-[var(--bg-soft)] aspect-video hover:border-[var(--purple-border)] transition-colors">
+            className="group relative rounded-[12px] overflow-hidden aspect-video transition-colors"
+            style={{ border: '1px solid var(--border)', background: 'var(--bg-soft)' }}>
             <img src={shot.url} alt="screenshot" className="w-full h-full object-cover" />
             <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100
               transition-opacity flex items-center justify-center">
@@ -202,7 +229,10 @@ function ScreenshotsPanel() {
   );
 }
 
-/* ── Main PreviewPage ── */
+
+/* ══════════════════════════════════════════════════════════════
+   PreviewPage — Main layout
+   ══════════════════════════════════════════════════════════════ */
 export function PreviewPage() {
   const { recordedBlob, recordedUrl, recordedMimeType,
     elapsedSeconds, recordingResolution, mode, reset } = useRecorderStore();
@@ -211,7 +241,7 @@ export function PreviewPage() {
 
   const [title, setTitle] = useState(() => {
     const d = new Date();
-    return `Recording – ${d.toLocaleDateString()} at ${d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}`;
+    return `Recording – ${d.toLocaleDateString()} at ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
   });
   const [editTitle, setEditTitle] = useState(false);
   const [playerTime, setPlayerTime] = useState(0);
@@ -226,152 +256,156 @@ export function PreviewPage() {
   const isUploaded  = recordingState === RECORDING_STATE.UPLOADED;
 
   const copyLink = () => {
-    navigator.clipboard?.writeText(window.location.href).catch(()=>{});
-    setCopied(true); setTimeout(()=>setCopied(false),2000);
+    navigator.clipboard?.writeText(window.location.href).catch(() => {});
+    setCopied(true); setTimeout(() => setCopied(false), 2000);
   };
 
   return (
-    <div className="min-h-screen bg-white flex flex-col anim-fade-in">
+    <div className="min-h-screen flex flex-col anim-fade-in" style={{ background: 'var(--bg)' }}>
 
-      {/* Nav */}
-      <header className="h-14 shrink-0 flex items-center justify-between px-6 border-b border-[var(--border)] bg-white">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 mr-3">
-            <div className="w-6 h-6 rounded-md bg-[var(--purple)] flex items-center justify-center shadow-sm">
-              <div className="w-2 h-2 rounded-full bg-white" />
+      {/* ── Navbar ── */}
+      <header className="h-[60px] shrink-0 flex items-center justify-between px-6 md:px-8
+        bg-white/80 backdrop-blur-md sticky top-0 z-50"
+        style={{ borderBottom: '1px solid var(--border)' }}>
+        <div className="flex items-center gap-4">
+          {/* Logo */}
+          <div className="flex items-center gap-2.5 mr-2">
+            <div className="w-7 h-7 rounded-[8px] flex items-center justify-center"
+              style={{ background: 'var(--purple)', boxShadow: 'var(--shadow-purple)' }}>
+              <div className="w-2.5 h-2.5 rounded-full bg-white/90" />
             </div>
-            <span className="text-[14px] font-bold text-[var(--text-1)] tracking-tight">Recrd</span>
+            <span className="text-[14px] font-bold tracking-[-0.02em]" style={{ color: 'var(--text-1)' }}>
+              Recrd
+            </span>
           </div>
-          <button onClick={reset} className="flex items-center gap-1.5 text-[13px] text-[var(--text-3)]
-            hover:text-[var(--text-1)] transition-colors">
-            <ArrowLeft size={14} /> New recording
+
+          <button onClick={reset} className="flex items-center gap-2 text-[13px] transition-colors"
+            style={{ color: 'var(--text-3)' }}
+            onMouseEnter={(e) => e.currentTarget.style.color = 'var(--text-1)'}
+            onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-3)'}>
+            <ArrowLeft size={15} /> New recording
           </button>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1
-            rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700">
+
+        <div className="flex items-center gap-2.5">
+          <span className="badge badge-green">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Ready
           </span>
-          <button className="w-8 h-8 rounded-lg flex items-center justify-center
-            text-[var(--text-3)] hover:bg-[var(--bg-soft)] transition-colors">
-            <MoreVertical size={16}/>
-          </button>
         </div>
       </header>
 
-      {/* Body */}
+      {/* ── Body ── */}
       <div className="flex-1 flex overflow-hidden">
 
-        {/* LEFT */}
+        {/* LEFT — Video + Actions */}
         <div className="flex-1 overflow-y-auto">
-          <div className="max-w-[820px] mx-auto px-6 py-7">
+          <div className="max-w-[860px] mx-auto px-6 md:px-8 py-8">
 
             {/* Title */}
-            <div className="flex items-start justify-between gap-3 mb-1">
+            <div className="flex items-start justify-between gap-4 mb-2">
               <div className="flex-1 min-w-0">
                 {editTitle ? (
-                  <input autoFocus value={title} onChange={e=>setTitle(e.target.value)}
-                    onBlur={()=>setEditTitle(false)}
-                    onKeyDown={e=>e.key==='Enter'&&setEditTitle(false)}
-                    className="w-full text-[22px] font-bold text-[var(--text-1)] bg-transparent
-                      outline-none border-b-2 border-[var(--purple)] pb-0.5" />
+                  <input autoFocus value={title} onChange={e => setTitle(e.target.value)}
+                    onBlur={() => setEditTitle(false)}
+                    onKeyDown={e => e.key === 'Enter' && setEditTitle(false)}
+                    className="w-full text-[24px] font-bold bg-transparent outline-none pb-1"
+                    style={{ color: 'var(--text-1)', borderBottom: '2px solid var(--purple)' }} />
                 ) : (
-                  <button onClick={()=>setEditTitle(true)}
-                    className="group flex items-center gap-2 text-left">
-                    <h1 className="text-[22px] font-bold text-[var(--text-1)] truncate">{title}</h1>
-                    <Edit3 size={14} className="text-[var(--text-3)] opacity-0 group-hover:opacity-100
-                      transition-opacity shrink-0 mt-1" />
+                  <button onClick={() => setEditTitle(true)} className="group flex items-center gap-2.5 text-left">
+                    <h1 className="text-[24px] font-bold truncate" style={{ color: 'var(--text-1)' }}>{title}</h1>
+                    <Edit3 size={15} className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-1"
+                      style={{ color: 'var(--text-3)' }} />
                   </button>
                 )}
-                <p className="text-[13px] text-[var(--text-3)] mt-1.5">
-                  <span className="text-[var(--purple)] font-medium">Recorded by you</span>
+                <p className="text-[13px] mt-2" style={{ color: 'var(--text-3)' }}>
+                  <span className="font-medium" style={{ color: 'var(--purple)' }}>Recorded by you</span>
                   {' · '}{formatDuration(elapsedSeconds)}
                   {recordingResolution && ` · ${recordingResolution}`}
                   {' · '}{modeLabel}
                 </p>
               </div>
-              <button className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0
-                text-[var(--text-3)] hover:bg-[var(--bg-soft)] transition-colors mt-0.5">
-                <MoreVertical size={16}/>
-              </button>
             </div>
 
             {/* Player */}
-            <div className="mt-5">
+            <div className="mt-6">
               <InlinePlayer src={recordedUrl} onTimeUpdate={setPlayerTime} />
             </div>
 
-            {/* Action buttons — exact Loom layout */}
-            <div className="flex flex-wrap items-center gap-2 mt-4">
-              <button onClick={copyLink}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-[13px] font-medium
-                  bg-[var(--text-1)] hover:bg-[#1a1a2e] text-white transition-all active:scale-95">
-                {copied ? <><Check size={14}/> Copied!</> : <><Link2 size={14}/> Copy link</>}
+            {/* Action buttons — Loom pill style */}
+            <div className="flex flex-wrap items-center gap-2.5 mt-5">
+              <button onClick={copyLink} className="pill-btn pill-btn-primary">
+                {copied ? <><Check size={15} /> Copied!</> : <><Link2 size={15} /> Copy link</>}
               </button>
+
               <button onClick={() => downloadBlob(recordedBlob, generateFilename('recording', ext))}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-[13px] font-medium
-                  border border-[var(--border)] hover:border-[var(--purple-border)] text-[var(--text-2)]
-                  hover:text-[var(--purple)] bg-white transition-all active:scale-95 shadow-sm">
-                <Download size={14}/> Download {ext.toUpperCase()}
+                className="pill-btn pill-btn-outline">
+                <Download size={15} /> Download {ext.toUpperCase()}
               </button>
-              <button onClick={()=>setPrivacy(p=>p==='Unlisted'?'Private':p==='Private'?'Public':'Unlisted')}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-[13px] font-medium
-                  border border-[var(--border)] hover:border-[var(--purple-border)] text-[var(--text-2)]
-                  hover:text-[var(--purple)] bg-white transition-all active:scale-95 shadow-sm">
-                <Lock size={14}/> {privacy}
+
+              <button onClick={() => setPrivacy(p => p === 'Unlisted' ? 'Private' : p === 'Private' ? 'Public' : 'Unlisted')}
+                className="pill-btn pill-btn-outline">
+                <Lock size={15} /> {privacy}
               </button>
-              <div className="flex-1"/>
+
+              <div className="flex-1" />
+
               {isUploaded ? (
-                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-[13px] font-medium
-                  bg-emerald-50 border border-emerald-200 text-emerald-700">
-                  <Check size={14}/> Uploaded
-                </div>
+                <span className="pill-btn" style={{ background: '#ecfdf5', color: '#059669', border: '1px solid #a7f3d0' }}>
+                  <Check size={15} /> Uploaded
+                </span>
               ) : isUploading ? (
-                <div className="flex flex-col gap-1 min-w-[160px]">
-                  <div className="flex items-center gap-2 text-[13px] text-[var(--text-2)]">
-                    <Loader2 size={13} className="animate-spin text-[var(--purple)]"/>
+                <div className="flex flex-col gap-1.5 min-w-[170px]">
+                  <div className="flex items-center gap-2 text-[13px]" style={{ color: 'var(--text-2)' }}>
+                    <Loader2 size={14} className="animate-spin" style={{ color: 'var(--purple)' }} />
                     Uploading… {uploadProgress}%
                   </div>
-                  <div className="h-1 rounded-full bg-[var(--bg-subtle)] overflow-hidden">
-                    <div className="h-full bg-[var(--purple)] rounded-full transition-all duration-200"
-                      style={{width:`${uploadProgress}%`}}/>
+                  <div className="h-1 rounded-full overflow-hidden" style={{ background: 'var(--bg-subtle)' }}>
+                    <div className="h-full rounded-full transition-all duration-200"
+                      style={{ width: `${uploadProgress}%`, background: 'var(--purple)' }} />
                   </div>
                 </div>
               ) : (
-                <button onClick={() => upload(title)}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-[13px] font-medium
-                    bg-[var(--purple)] hover:bg-[#6d28d9] text-white shadow-sm transition-all active:scale-95">
-                  <Upload size={14}/> Upload video
+                <button onClick={() => upload(title)} className="pill-btn pill-btn-purple">
+                  <Upload size={15} /> Upload video
                 </button>
               )}
             </div>
 
             {/* Details card */}
-            <div className="mt-6 surface-card p-5">
-              <h3 className="text-[13px] font-semibold text-[var(--text-1)] mb-4">Recording details</h3>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="surface-card p-6 mt-8">
+              <h3 className="text-[14px] font-semibold mb-5" style={{ color: 'var(--text-1)' }}>
+                Recording details
+              </h3>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-5">
                 <Detail label="Duration"   value={formatDuration(elapsedSeconds)} />
                 <Detail label="File size"  value={formatFileSize(recordedBlob?.size)} />
                 <Detail label="Format"     value={ext.toUpperCase()} />
                 {recordingResolution && <Detail label="Resolution" value={recordingResolution} />}
               </div>
-              <p className="text-[12px] text-[var(--text-3)] mt-4 pt-4 border-t border-[var(--border)] leading-relaxed">
+              <p className="text-[12px] mt-5 pt-5 leading-relaxed"
+                style={{ borderTop: '1px solid var(--border)', color: 'var(--text-3)' }}>
                 Upload uses a mock Cloudflare Stream API. Replace the{' '}
-                <code className="font-mono bg-[var(--bg-subtle)] px-1.5 py-0.5 rounded text-[var(--text-2)]">TODO</code>{' '}
-                blocks in <code className="font-mono bg-[var(--bg-subtle)] px-1.5 py-0.5 rounded text-[var(--text-2)]">cloudflareService.js</code>.
+                <code className="font-mono px-1.5 py-0.5 rounded-[6px]"
+                  style={{ background: 'var(--bg-subtle)', color: 'var(--text-2)' }}>TODO</code>{' '}
+                blocks in <code className="font-mono px-1.5 py-0.5 rounded-[6px]"
+                  style={{ background: 'var(--bg-subtle)', color: 'var(--text-2)' }}>cloudflareService.js</code>.
               </p>
             </div>
 
+            {/* Delete */}
             <button onClick={reset}
-              className="flex items-center gap-2 text-[13px] text-[var(--text-3)] hover:text-red-500
-                transition-colors mt-5">
-              <Trash2 size={13}/> Delete this recording
+              className="flex items-center gap-2 text-[13px] mt-6 transition-colors"
+              style={{ color: 'var(--text-3)' }}
+              onMouseEnter={(e) => e.currentTarget.style.color = '#dc2626'}
+              onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-3)'}>
+              <Trash2 size={14} /> Delete this recording
             </button>
           </div>
         </div>
 
-        {/* RIGHT: Comments */}
-        <div className="w-[320px] shrink-0 border-l border-[var(--border)] flex flex-col overflow-hidden bg-white">
+        {/* RIGHT — Sidebar */}
+        <div className="w-[340px] shrink-0 flex flex-col overflow-hidden bg-white hidden md:flex"
+          style={{ borderLeft: '1px solid var(--border)' }}>
           <CommentsSidebar currentTime={playerTime} />
           <ScreenshotsPanel />
         </div>
@@ -383,8 +417,9 @@ export function PreviewPage() {
 function Detail({ label, value }) {
   return (
     <div>
-      <div className="text-[11px] font-semibold text-[var(--text-3)] uppercase tracking-wider mb-1">{label}</div>
-      <div className="text-[15px] font-bold text-[var(--text-1)]">{value}</div>
+      <div className="text-[11px] font-semibold uppercase tracking-[0.08em] mb-1.5"
+        style={{ color: 'var(--text-3)' }}>{label}</div>
+      <div className="text-[16px] font-bold" style={{ color: 'var(--text-1)' }}>{value}</div>
     </div>
   );
 }

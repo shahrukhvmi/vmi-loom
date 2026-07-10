@@ -1,28 +1,33 @@
-/**
- * useRecorder
- *
- * Orchestrates the full recording lifecycle.
- *
- * FIX: createCompositeStream is now async (waits for video frames before
- * sizing canvas). All callers must await it.
- *
- * FIX: SCREEN_CAMERA always acquires camera regardless of cameraEnabled toggle.
- * The toggle only applies to CAMERA-only mode.
- *
- * FIX: On error, re-open launcher so the user sees the error message.
- *
- * FIX: stopRecording is stored in a ref so the 'ended' event listener on the
- * screen track always calls the latest version (avoids stale closure).
- */
+import { useCallback, useRef } from "react";
+import { useRecorderStore } from "../context/recorderStore";
+import { useScreenRecording } from "./useScreenRecording";
+import { useCamera } from "./useCamera";
+import { useMicrophone } from "./useMicrophone";
+import { createCompositeStream } from "../services/recordingService";
+import { RECORDING_STATE, RECORDING_MODE } from "../constants";
+import { stopAllTracks, getStreamResolution } from "../utils";
 
-import { useCallback, useRef } from 'react';
-import { useRecorderStore } from '../context/recorderStore';
-import { useScreenRecording } from './useScreenRecording';
-import { useCamera } from './useCamera';
-import { useMicrophone } from './useMicrophone';
-import { createMediaRecorder, createCompositeStream } from '../services/recordingService';
-import { RECORDING_STATE, RECORDING_MODE } from '../constants';
-import { stopAllTracks, getStreamResolution } from '../utils';
+// ── Module-level singletons ────────────────────────────────────────────────
+// These live OUTSIDE the hook so all hook instances share the same refs.
+// This fixes the bug where RecordingLauncher and RecordingControls each got
+// their own hook instance with their own (empty) recorderRef.
+const _recorder = { current: null };
+const _chunks = { current: [] };
+const _mime = { current: "" };
+const _finalized = { current: false };
+const _streams = {
+  current: {
+    screenStream: null,
+    cameraStream: null,
+    micStream: null,
+    compositeCleanup: null,
+  },
+};
+const _timer = { current: null };
+const _count = { current: 0 };
+const _stopFn = { current: null }; // stable ref for 'ended' event listener
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 export function useRecorder() {
   const store = useRecorderStore();
@@ -30,204 +35,277 @@ export function useRecorder() {
   const { startCamera } = useCamera();
   const { startMicrophone } = useMicrophone();
 
-  const chunksRef   = useRef([]);
-  const timerRef    = useRef(null);
-  const countRef    = useRef(0);
-  const mimeTypeRef = useRef('');
-  const stopRef     = useRef(null); // stable ref so event listeners don't go stale
-
-  // ── Timer ────────────────────────────────────────────────────────────────
+  // ── Timer ───────────────────────────────────────────────────────────────
   const startTimer = useCallback(() => {
-    countRef.current = 0;
+    _count.current = 0;
     store.setElapsedSeconds(0);
-    clearInterval(timerRef.current);
-    timerRef.current = setInterval(() => {
-      countRef.current += 1;
-      store.setElapsedSeconds(countRef.current);
+    clearInterval(_timer.current);
+    _timer.current = setInterval(() => {
+      _count.current += 1;
+      store.setElapsedSeconds(_count.current);
     }, 1000);
   }, [store]);
 
   const stopTimer = useCallback(() => {
-    clearInterval(timerRef.current);
-    timerRef.current = null;
+    clearInterval(_timer.current);
+    _timer.current = null;
   }, []);
 
-  // ── Finalize (called by MediaRecorder onstop) ────────────────────────────
-  const finalizeRecording = useCallback((mimeType) => {
-    const { screenStream, cameraStream, micStream, compositeCleanup } = store;
+  // ── Finalize ─────────────────────────────────────────────────────────────
+  const finalizeRecording = useCallback(() => {
+    if (_finalized.current) return;
+    _finalized.current = true;
 
-    compositeCleanup?.();
-    stopAllTracks(screenStream);
-    stopAllTracks(cameraStream);
-    stopAllTracks(micStream);
+    const { screenStream, cameraStream, micStream, compositeCleanup } =
+      _streams.current;
+    const storeState = useRecorderStore.getState();
 
-    const effectiveMime = mimeType || mimeTypeRef.current || 'video/webm';
-    const blob = new Blob(chunksRef.current, { type: effectiveMime });
-    const url  = URL.createObjectURL(blob);
+    if (compositeCleanup) {
+      // Screen+Camera mode: cleanup() handles stopping screen+camera+mic tracks
+      compositeCleanup();
+    } else {
+      // Screen-only or Camera-only: stop all streams directly
+      [
+        screenStream,
+        cameraStream,
+        micStream,
+        storeState.screenStream,
+        storeState.cameraStream,
+        storeState.micStream,
+        storeState.combinedStream,
+      ].forEach((stream) => {
+        if (!stream) return;
+        stream.getTracks().forEach((t) => t.stop());
+      });
+    }
+
+    const mime = _mime.current || "video/webm";
+    const blob = new Blob(_chunks.current, { type: mime });
+    const url = URL.createObjectURL(blob);
+
+    console.log(
+      "[finalize] chunks:",
+      _chunks.current.length,
+      "size:",
+      blob.size,
+      "mime:",
+      mime,
+    );
 
     store.setRecordedOutput({
       blob,
       url,
-      mimeType: effectiveMime,
-      resolution: store.recordingResolution,
+      mimeType: mime,
+      resolution: storeState.recordingResolution,
     });
     store.setRecordingState(RECORDING_STATE.PREVIEW);
   }, [store]);
 
   // ── Stop ─────────────────────────────────────────────────────────────────
   const stopRecording = useCallback(() => {
-    const { mediaRecorder, recordingState } = store;
-    if (
-      recordingState !== RECORDING_STATE.RECORDING &&
-      recordingState !== RECORDING_STATE.PAUSED
-    ) return;
+    const state = useRecorderStore.getState().recordingState;
+    if (state !== RECORDING_STATE.RECORDING && state !== RECORDING_STATE.PAUSED)
+      return;
 
     stopTimer();
-    mediaRecorder?.stop();
     store.setRecordingState(RECORDING_STATE.STOPPED);
-  }, [store, stopTimer]);
 
-  // Keep stopRef current so the track-ended listener always sees latest fn
-  stopRef.current = stopRecording;
+    const mr = _recorder.current;
+    console.log("[stopRecording] mr:", mr, "state:", mr?.state);
+
+    if (mr && mr.state !== "inactive") {
+      mr.stop(); // triggers onstop → finalizeRecording
+    } else {
+      finalizeRecording();
+    }
+  }, [stopTimer, store, finalizeRecording]);
+
+  _stopFn.current = stopRecording;
 
   // ── Start ─────────────────────────────────────────────────────────────────
   const startRecording = useCallback(async () => {
+    // Reset all singletons for new session
+    _finalized.current = false;
+    _recorder.current = null;
+    _chunks.current = [];
+    _mime.current = "";
+    _streams.current = {
+      screenStream: null,
+      cameraStream: null,
+      micStream: null,
+      compositeCleanup: null,
+    };
+
     store.setRecordingState(RECORDING_STATE.REQUESTING);
     store.clearError();
-    chunksRef.current = [];
 
     try {
       const { mode, micEnabled, cameraEnabled } = store;
       let screenStream = null;
       let cameraStream = null;
-      let micStream    = null;
+      let micStream = null;
 
-      // ── Acquire streams ──────────────────────────────────────────────────
-      if (mode === RECORDING_MODE.SCREEN || mode === RECORDING_MODE.SCREEN_CAMERA) {
+      if (
+        mode === RECORDING_MODE.SCREEN ||
+        mode === RECORDING_MODE.SCREEN_CAMERA
+      ) {
         screenStream = await startScreenCapture();
-
-        // When user clicks "Stop sharing" in the browser toolbar
-        screenStream.getVideoTracks()[0]?.addEventListener('ended', () => {
-          stopRef.current?.();
+        screenStream.getVideoTracks()[0]?.addEventListener("ended", () => {
+          _stopFn.current?.();
         });
       }
 
-      // Camera:
-      //  • CAMERA mode       — respect cameraEnabled toggle
-      //  • SCREEN_CAMERA     — always acquire (overlay always needs it)
       const needCamera =
-        mode === RECORDING_MODE.SCREEN_CAMERA ||
-        (mode === RECORDING_MODE.CAMERA && cameraEnabled);
+        mode === RECORDING_MODE.SCREEN_CAMERA || mode === RECORDING_MODE.CAMERA; // always acquire camera in CAMERA mode
 
-      if (needCamera) {
-        cameraStream = await startCamera();
-      }
+      if (needCamera) cameraStream = await startCamera();
+      if (micEnabled) micStream = await startMicrophone();
 
-      if (micEnabled) {
-        micStream = await startMicrophone();
-      }
+      _streams.current = {
+        screenStream,
+        cameraStream,
+        micStream,
+        compositeCleanup: null,
+      };
 
-      // ── Build record stream ──────────────────────────────────────────────
       let recordStream;
-      let compositeCleanup = null;
 
-      if (mode === RECORDING_MODE.SCREEN_CAMERA && screenStream && cameraStream) {
-        // createCompositeStream is async — must await
+      if (
+        mode === RECORDING_MODE.SCREEN_CAMERA &&
+        screenStream &&
+        cameraStream
+      ) {
         const { combinedStream, cleanup } = await createCompositeStream(
           screenStream,
           cameraStream,
-          micStream
+          micStream,
         );
-        recordStream     = combinedStream;
-        compositeCleanup = cleanup;
+        recordStream = combinedStream;
+        _streams.current.compositeCleanup = cleanup;
         store.setStreams({ combinedStream });
-
       } else if (mode === RECORDING_MODE.SCREEN && screenStream) {
         recordStream = new MediaStream([
           ...screenStream.getTracks(),
           ...(micStream?.getAudioTracks() || []),
         ]);
-
       } else if (mode === RECORDING_MODE.CAMERA && cameraStream) {
         recordStream = new MediaStream([
           ...cameraStream.getVideoTracks(),
           ...(micStream?.getAudioTracks() || []),
         ]);
-
       } else {
-        throw new Error('No valid stream combination available.');
+        throw new Error("No valid stream combination available.");
       }
 
-      if (compositeCleanup) store.setCompositeCleanup(compositeCleanup);
-
-      // Resolution from actual video track (more reliable post-await)
+      store.setStreams({ screenStream, cameraStream, micStream });
       const resolution =
         getStreamResolution(screenStream) ||
-        getStreamResolution(cameraStream)  ||
+        getStreamResolution(cameraStream) ||
         getStreamResolution(recordStream);
       store.setStreams({ recordingResolution: resolution });
 
-      // ── MediaRecorder ────────────────────────────────────────────────────
-      const recorder = createMediaRecorder(
-        recordStream,
-        (chunk) => chunksRef.current.push(chunk),
-        () => finalizeRecording(recorder.mimeType)
-      );
+      // ── Build MediaRecorder ──────────────────────────────────────────────
+      const MIME_TYPES = [
+        "video/webm;codecs=vp9,opus",
+        "video/webm;codecs=vp8,opus",
+        "video/webm",
+        "video/mp4",
+      ];
+      const bestMime =
+        MIME_TYPES.find((t) => MediaRecorder.isTypeSupported(t)) || "";
+      const mr = bestMime
+        ? new MediaRecorder(recordStream, { mimeType: bestMime })
+        : new MediaRecorder(recordStream);
 
-      mimeTypeRef.current = recorder.mimeType;
-      store.setMediaRecorder(recorder);
-      recorder.start(250); // 250ms chunks for smoother progress
+      mr.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) _chunks.current.push(e.data);
+      };
+
+      mr.onstop = () => {
+        console.log("[onstop] chunks:", _chunks.current.length);
+        finalizeRecording();
+      };
+
+      _mime.current = mr.mimeType || bestMime || "video/webm";
+      _recorder.current = mr;
+      store.setMediaRecorder(mr);
+
+      mr.start(250);
+      console.log(
+        "[startRecording] started, state:",
+        mr.state,
+        "mime:",
+        mr.mimeType,
+      );
 
       store.setRecordingState(RECORDING_STATE.RECORDING);
       store.setIsPaused(false);
       startTimer();
-
     } catch (err) {
-      console.error('[useRecorder] startRecording error:', err);
-      store.setError(err.message || 'Failed to start recording.');
+      console.error("[useRecorder] error:", err);
+      store.setError(err.message || "Failed to start recording.");
       store.setRecordingState(RECORDING_STATE.IDLE);
-      store.openLauncher(); // show error in launcher
+      store.openLauncher();
     }
-  }, [store, startScreenCapture, startCamera, startMicrophone, startTimer, finalizeRecording]);
+  }, [
+    store,
+    startScreenCapture,
+    startCamera,
+    startMicrophone,
+    startTimer,
+    finalizeRecording,
+  ]);
 
-  // ── Pause ─────────────────────────────────────────────────────────────────
+  // ── Pause ────────────────────────────────────────────────────────────────
   const pauseRecording = useCallback(() => {
     if (store.recordingState !== RECORDING_STATE.RECORDING) return;
     try {
-      store.mediaRecorder?.pause();
+      _recorder.current?.pause();
       store.setRecordingState(RECORDING_STATE.PAUSED);
       store.setIsPaused(true);
       stopTimer();
     } catch (e) {
-      console.error('Pause failed:', e);
+      console.error("Pause failed:", e);
     }
   }, [store, stopTimer]);
 
-  // ── Resume ────────────────────────────────────────────────────────────────
+  // ── Resume ───────────────────────────────────────────────────────────────
   const resumeRecording = useCallback(() => {
     if (store.recordingState !== RECORDING_STATE.PAUSED) return;
     try {
-      store.mediaRecorder?.resume();
+      _recorder.current?.resume();
       store.setRecordingState(RECORDING_STATE.RECORDING);
       store.setIsPaused(false);
       startTimer();
     } catch (e) {
-      console.error('Resume failed:', e);
+      console.error("Resume failed:", e);
     }
   }, [store, startTimer]);
 
-  // ── Cancel ────────────────────────────────────────────────────────────────
+  // ── Cancel ───────────────────────────────────────────────────────────────
   const cancelRecording = useCallback(() => {
-    const { mediaRecorder, screenStream, cameraStream, micStream, compositeCleanup } = store;
+    _finalized.current = true;
     stopTimer();
-    try { mediaRecorder?.stop(); } catch {}
+    const mr = _recorder.current;
+    try {
+      if (mr && mr.state !== "inactive") mr.stop();
+    } catch {}
+    const { screenStream, cameraStream, micStream, compositeCleanup } =
+      _streams.current;
     compositeCleanup?.();
     stopAllTracks(screenStream);
     stopAllTracks(cameraStream);
     stopAllTracks(micStream);
-    chunksRef.current = [];
+    _chunks.current = [];
+    _recorder.current = null;
     store.reset();
   }, [store, stopTimer]);
 
-  return { startRecording, pauseRecording, resumeRecording, stopRecording, cancelRecording };
+  return {
+    startRecording,
+    pauseRecording,
+    resumeRecording,
+    stopRecording,
+    cancelRecording,
+  };
 }
