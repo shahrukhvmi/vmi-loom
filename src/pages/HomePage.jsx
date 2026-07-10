@@ -156,7 +156,7 @@ export function HomePage() {
             <button
               onClick={openLauncher}
               className="inline-flex items-center gap-2 px-7 py-3.5 rounded-full text-[15px] font-semibold
-                bg-[#7c3aed] hover:bg-[#6d28d9] text-white transition-all active:scale-95"
+                bg-[#7c3aed] hover:bg-[#6d28d9] text-white transition-all active:scale-95 cursor-pointer"
               style={{ boxShadow: "0 4px 14px rgba(124,58,237,.35)" }}
             >
               <span className="w-2.5 h-2.5 rounded-full bg-white/80" />
@@ -169,7 +169,7 @@ export function HomePage() {
                 onClick={() => setShotMenu(!shotMenu)}
                 className="inline-flex items-center gap-2 px-6 py-3.5 rounded-full text-[15px] font-medium
                   bg-white border border-[#ebebf0] text-[#555570] hover:border-[#d4c5fd] hover:text-[#7c3aed]
-                  transition-all active:scale-95 shadow-sm"
+                  transition-all active:scale-95 shadow-sm cursor-pointer"
               >
                 <ImageIcon size={16} />
                 Screenshot
