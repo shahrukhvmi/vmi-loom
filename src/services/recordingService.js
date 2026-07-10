@@ -95,25 +95,37 @@ export async function createCompositeStream(
     cameraStream.active,
   );
 
+  // FIX: when tab becomes visible again, resume video playback
+  // Chrome throttles/pauses captured streams when tab is backgrounded
+  const onVisibilityChange = () => {
+    if (document.visibilityState === "visible") {
+      screenVideo.play().catch(() => {});
+      cameraVideo.play().catch(() => {});
+    }
+  };
+  document.addEventListener("visibilitychange", onVisibilityChange);
+
   // ── Canvas ────────────────────────────────────────────────────────────────
   const canvas = document.createElement("canvas");
   canvas.width = canvasWidth;
   canvas.height = canvasHeight;
   const ctx = canvas.getContext("2d", { alpha: false });
 
-  let animFrameId;
+  let intervalId;
   let running = true;
+
+  const pad = 28;
+  const x = canvasWidth - overlayWidth - pad;
+  const y = canvasHeight - overlayHeight - pad;
+  const radius = 20;
 
   function draw() {
     if (!running) return;
 
+    // Draw screen
     ctx.drawImage(screenVideo, 0, 0, canvasWidth, canvasHeight);
 
-    const pad = 28;
-    const x = canvasWidth - overlayWidth - pad;
-    const y = canvasHeight - overlayHeight - pad;
-    const radius = 20;
-
+    // Camera PiP overlay
     ctx.save();
     ctx.shadowColor = "rgba(0,0,0,0.55)";
     ctx.shadowBlur = 20;
@@ -127,6 +139,7 @@ export async function createCompositeStream(
     ctx.drawImage(cameraVideo, 0, 0, overlayWidth, overlayHeight);
     ctx.restore();
 
+    // Border ring
     ctx.save();
     ctx.strokeStyle = "rgba(255,255,255,0.22)";
     ctx.lineWidth = 2.5;
@@ -134,11 +147,12 @@ export async function createCompositeStream(
     ctx.roundRect(x, y, overlayWidth, overlayHeight, radius);
     ctx.stroke();
     ctx.restore();
-
-    animFrameId = requestAnimationFrame(draw);
   }
 
-  draw();
+  // FIX: use setInterval instead of requestAnimationFrame
+  // rAF is throttled/paused when tab is in background or user switches apps
+  // setInterval at ~30fps keeps drawing even when tab is not visible
+  intervalId = setInterval(draw, 1000 / 30);
 
   const canvasStream = canvas.captureStream(30);
 
@@ -152,7 +166,7 @@ export async function createCompositeStream(
   // This prevents camera being killed mid-recording when streams are cleaned up
   const cleanup = () => {
     running = false;
-    cancelAnimationFrame(animFrameId);
+    clearInterval(intervalId);
 
     // Detach srcObject BEFORE stopping tracks
     screenVideo.pause();
@@ -160,7 +174,8 @@ export async function createCompositeStream(
     screenVideo.srcObject = null;
     cameraVideo.srcObject = null;
 
-    // Remove from DOM
+    // Remove event listener and DOM elements
+    document.removeEventListener("visibilitychange", onVisibilityChange);
     screenVideo.remove();
     cameraVideo.remove();
 

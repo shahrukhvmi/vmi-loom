@@ -95,7 +95,7 @@ export default function App() {
                 </div>
 
                 <div className="flex items-center gap-4">
-                  <select className="rounded-md bg-white/10 px-2 py-1 text-sm text-black">
+                  <select className="rounded-md bg-white/10 px-2 py-1 text-sm">
                     <option>1x</option>
                     <option>1.25x</option>
                     <option>1.5x</option>

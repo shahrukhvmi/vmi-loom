@@ -457,3 +457,28 @@ select {
   cursor: pointer;
   border-radius: var(--radius-sm);
 }
+
+/* ── Input field ── */
+.input-field {
+  width: 100%;
+  padding: 10px 14px;
+  font-size: 14px;
+  border: 1.5px solid #ebebf0;
+  border-radius: 12px;
+  background: #f8f8fa;
+  color: #1a1a2e;
+  outline: none;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    box-shadow 0.15s ease;
+  font-family: inherit;
+}
+.input-field::placeholder {
+  color: #8c8ca3;
+}
+.input-field:focus {
+  border-color: #7c3aed;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.1);
+}

@@ -7,7 +7,11 @@ import {
   Maximize,
   ChevronRight,
   ImageIcon,
+  LogOut,
 } from "lucide-react";
+import toast from "react-hot-toast";
+import { useAuthStore } from "../context/authStore";
+import { authService } from "../services/authService";
 import { useRecorderStore } from "../context/recorderStore";
 import { useScreenshot } from "../hooks/useScreenshot";
 import { Button } from "../components/ui/Button";
@@ -35,6 +39,15 @@ const MODES = [
 
 export function HomePage() {
   const { openLauncher, setMode } = useRecorderStore();
+  const { clearAuth, user } = useAuthStore();
+
+  const handleLogout = async () => {
+    try {
+      await authService.logout();
+    } catch {}
+    clearAuth();
+    toast.success("Logged out");
+  };
   const { captureFullScreen, captureArea } = useScreenshot();
   const [shotMenu, setShotMenu] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -62,7 +75,7 @@ export function HomePage() {
             <div className="w-3 h-3 rounded-full bg-white/90" />
           </div>
           <span className="text-[16px] font-bold tracking-[-0.02em] text-[#1a1a2e]">
-            VMI Recorder
+            Recrd
           </span>
         </div>
 
@@ -124,6 +137,14 @@ export function HomePage() {
             <span className="w-2 h-2 rounded-full bg-white/80" />
             Record
           </Button>
+
+          <button
+            onClick={handleLogout}
+            title="Logout"
+            className="w-9 h-9 flex items-center justify-center rounded-[10px] text-[#8c8ca3] hover:bg-[#f8f8fa] hover:text-[#dc2626] transition-all ml-1"
+          >
+            <LogOut size={16} />
+          </button>
         </nav>
       </header>
 
@@ -156,10 +177,10 @@ export function HomePage() {
             <button
               onClick={openLauncher}
               className="inline-flex items-center gap-2 px-7 py-3.5 rounded-full text-[15px] font-semibold
-                bg-[#7c3aed] hover:bg-[#6d28d9] text-white transition-all active:scale-95 cursor-pointer"
+                bg-[#7c3aed] hover:bg-[#6d28d9] text-white transition-all active:scale-95"
               style={{ boxShadow: "0 4px 14px rgba(124,58,237,.35)" }}
             >
-              <span className="sm:w-2.5 sm:h-2.5 rounded-full bg-white/80" />
+              <span className="w-2.5 h-2.5 rounded-full bg-white/80" />
               Start recording
               <ChevronRight size={16} className="opacity-70" />
             </button>
@@ -167,9 +188,9 @@ export function HomePage() {
             <div className="relative">
               <button
                 onClick={() => setShotMenu(!shotMenu)}
-                className="inline-flex items-center gap-2 px-6 py-3.5 rounded-full text-xs  sm:text-[15px] font-medium
+                className="inline-flex items-center gap-2 px-6 py-3.5 rounded-full text-[15px] font-medium
                   bg-white border border-[#ebebf0] text-[#555570] hover:border-[#d4c5fd] hover:text-[#7c3aed]
-                  transition-all active:scale-95 shadow-sm cursor-pointer"
+                  transition-all active:scale-95 shadow-sm"
               >
                 <ImageIcon size={16} />
                 Screenshot
@@ -180,7 +201,7 @@ export function HomePage() {
 
         {/* ── Mode Cards ── */}
         <div
-          className="grid sm:grid-cols-3  gap-4 max-w-[680px] w-full mt-16 anim-fade-up"
+          className="grid grid-cols-3 gap-4 max-w-[680px] w-full mt-16 anim-fade-up"
           style={{ animationDelay: "100ms" }}
         >
           {MODES.map(({ icon: Icon, label, desc, mode }) => (
