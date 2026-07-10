@@ -109,7 +109,7 @@ export function RecordingLauncher() {
             </div>
             <button
               onClick={closeLauncher}
-              className="w-8 h-8 rounded-[10px] flex items-center justify-center transition-colors"
+              className="w-8 h-8 rounded-[10px] flex items-center justify-center transition-colors cursor-pointer"
               style={{ color: "var(--text-3)" }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.background = "var(--bg-soft)";

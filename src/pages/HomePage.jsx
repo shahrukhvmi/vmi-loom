@@ -62,7 +62,7 @@ export function HomePage() {
             <div className="w-3 h-3 rounded-full bg-white/90" />
           </div>
           <span className="text-[16px] font-bold tracking-[-0.02em] text-[#1a1a2e]">
-            Recrd
+            VMI Recorder
           </span>
         </div>
 
@@ -159,7 +159,7 @@ export function HomePage() {
                 bg-[#7c3aed] hover:bg-[#6d28d9] text-white transition-all active:scale-95 cursor-pointer"
               style={{ boxShadow: "0 4px 14px rgba(124,58,237,.35)" }}
             >
-              <span className="w-2.5 h-2.5 rounded-full bg-white/80" />
+              <span className="sm:w-2.5 sm:h-2.5 rounded-full bg-white/80" />
               Start recording
               <ChevronRight size={16} className="opacity-70" />
             </button>
@@ -167,7 +167,7 @@ export function HomePage() {
             <div className="relative">
               <button
                 onClick={() => setShotMenu(!shotMenu)}
-                className="inline-flex items-center gap-2 px-6 py-3.5 rounded-full text-[15px] font-medium
+                className="inline-flex items-center gap-2 px-6 py-3.5 rounded-full text-xs  sm:text-[15px] font-medium
                   bg-white border border-[#ebebf0] text-[#555570] hover:border-[#d4c5fd] hover:text-[#7c3aed]
                   transition-all active:scale-95 shadow-sm cursor-pointer"
               >
@@ -180,7 +180,7 @@ export function HomePage() {
 
         {/* ── Mode Cards ── */}
         <div
-          className="grid grid-cols-3 gap-4 max-w-[680px] w-full mt-16 anim-fade-up"
+          className="grid sm:grid-cols-3  gap-4 max-w-[680px] w-full mt-16 anim-fade-up"
           style={{ animationDelay: "100ms" }}
         >
           {MODES.map(({ icon: Icon, label, desc, mode }) => (
