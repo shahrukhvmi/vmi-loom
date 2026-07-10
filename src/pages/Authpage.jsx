@@ -36,7 +36,8 @@ export function AuthPage() {
         ? await authService.register(form.name, form.email, form.password)
         : await authService.login(form.email, form.password);
 
-      const { token, user } = res.data;
+      const token = res.data.data.token;
+      const user = res.data.data.user;
       setAuth(user, token);
       toast.success(
         isRegister
@@ -176,7 +177,7 @@ export function AuthPage() {
           {isRegister ? "Already have an account?" : "Don't have an account?"}{" "}
           <button
             onClick={switchMode}
-            className="text-[#7c3aed] font-semibold hover:underline transition-all cursor-pointer"
+            className="text-[#7c3aed] font-semibold hover:underline transition-all"
           >
             {isRegister ? "Sign in" : "Create one"}
           </button>
