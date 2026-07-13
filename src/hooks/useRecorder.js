@@ -4,6 +4,10 @@ import { useScreenRecording } from "./useScreenRecording";
 import { useCamera } from "./useCamera";
 import { useMicrophone } from "./useMicrophone";
 import { createCompositeStream } from "../services/recordingService";
+import { videoService } from "../services/authService";
+
+// Upload state — shared across hook instances
+const _uploadProgress = { current: 0 };
 import { RECORDING_STATE, RECORDING_MODE } from "../constants";
 import { stopAllTracks, getStreamResolution } from "../utils";
 
@@ -26,6 +30,7 @@ const _streams = {
 const _timer = { current: null };
 const _count = { current: 0 };
 const _stopFn = { current: null }; // stable ref for 'ended' event listener
+const _uploadMeta = { current: null }; // { uploadUrl, uploadUid } from API
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -99,6 +104,50 @@ export function useRecorder() {
       resolution: storeState.recordingResolution,
     });
     store.setRecordingState(RECORDING_STATE.PREVIEW);
+
+    // Auto-upload if we have an upload URL from the API
+    const meta = _uploadMeta.current;
+    if (meta?.data?.upload_url && blob.size > 0) {
+      const uploadUrl = meta.data.upload_url;
+      const uploadUid = meta.data.upload_uid;
+      const videoUuid = meta.data.video?.uuid;
+
+      console.log("[upload] starting upload to:", uploadUrl, "uid:", uploadUid);
+      store.setRecordingState(RECORDING_STATE.UPLOADING);
+      store.setUploadProgress(0);
+
+      videoService
+        .uploadVideo(uploadUrl, blob, mime, (pct) => {
+          store.setUploadProgress(pct);
+        })
+        .then(async () => {
+          console.log("[upload] done! uid:", uploadUid, "uuid:", videoUuid);
+          store.setUploadProgress(100);
+          store.setRecordingState(RECORDING_STATE.UPLOADED);
+          store.setUploadedRecord({ uploadUid, videoUuid });
+
+          // Hit share API with the video uuid (with dashes)
+          try {
+            const shareRes = await videoService.createShare(videoUuid);
+            console.log("[share response]", shareRes.data);
+            // Replace backend's localhost:3000 with current app origin
+            const rawUrl = shareRes.data?.data?.share_url || "";
+            const shareUrl = rawUrl.replace(
+              /^https?:\/\/localhost:\d+/,
+              window.location.origin,
+            );
+            const shareUuid = shareRes.data?.data?.share_uuid;
+            store.setShareLink({ shareUrl, shareUuid });
+          } catch (e) {
+            console.error("[share] failed:", e?.response?.data || e.message);
+          }
+        })
+        .catch((err) => {
+          console.error("[upload] failed:", err.message);
+          // Don't block preview — just go back to PREVIEW state
+          store.setRecordingState(RECORDING_STATE.PREVIEW);
+        });
+    }
   }, [store]);
 
   // ── Stop ─────────────────────────────────────────────────────────────────
@@ -127,6 +176,7 @@ export function useRecorder() {
     // Reset all singletons for new session
     _finalized.current = false;
     _recorder.current = null;
+    _uploadMeta.current = null;
     _chunks.current = [];
     _mime.current = "";
     _streams.current = {
@@ -157,6 +207,16 @@ export function useRecorder() {
 
       const needCamera =
         mode === RECORDING_MODE.SCREEN_CAMERA || mode === RECORDING_MODE.CAMERA; // always acquire camera in CAMERA mode
+
+      // Hit upload-url AFTER user accepted screen share — not before
+      try {
+        const res = await videoService.getUploadUrl("Recording");
+        console.log("[upload-url response]", res.data);
+        _uploadMeta.current = res.data;
+      } catch (e) {
+        console.warn("[upload-url] failed:", e?.response?.data || e.message);
+        _uploadMeta.current = null;
+      }
 
       if (needCamera) cameraStream = await startCamera();
       if (micEnabled) micStream = await startMicrophone();

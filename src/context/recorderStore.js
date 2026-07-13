@@ -1,5 +1,9 @@
-import { create } from 'zustand';
-import { RECORDING_STATE, RECORDING_MODE, PERMISSION_STATE } from '../constants';
+import { create } from "zustand";
+import {
+  RECORDING_STATE,
+  RECORDING_MODE,
+  PERMISSION_STATE,
+} from "../constants";
 
 const initialState = {
   isLauncherOpen: false,
@@ -18,7 +22,7 @@ const initialState = {
   compositeCleanup: null,
   recordedBlob: null,
   recordedUrl: null,
-  recordedMimeType: '',
+  recordedMimeType: "",
   recordingResolution: null,
   permissions: {
     screen: PERMISSION_STATE.UNKNOWN,
@@ -27,52 +31,64 @@ const initialState = {
   },
   screenshots: [],
   // Screenshot preview modal
-  screenshotPreviewId: null,   // which screenshot to show in fullscreen preview
+  screenshotPreviewId: null, // which screenshot to show in fullscreen preview
   uploadProgress: 0,
   uploadedRecord: null,
+  shareLink: null,
   error: null,
 };
 
 export const useRecorderStore = create((set, get) => ({
   ...initialState,
 
-  openLauncher:  () => set({ isLauncherOpen: true }),
+  openLauncher: () => set({ isLauncherOpen: true }),
   closeLauncher: () => set({ isLauncherOpen: false }),
 
   setMode: (mode) => set({ mode }),
-  toggleMic:         () => set((s) => ({ micEnabled:         !s.micEnabled })),
-  toggleCamera:      () => set((s) => ({ cameraEnabled:      !s.cameraEnabled })),
-  toggleSystemAudio: () => set((s) => ({ systemAudioEnabled: !s.systemAudioEnabled })),
+  toggleMic: () => set((s) => ({ micEnabled: !s.micEnabled })),
+  toggleCamera: () => set((s) => ({ cameraEnabled: !s.cameraEnabled })),
+  toggleSystemAudio: () =>
+    set((s) => ({ systemAudioEnabled: !s.systemAudioEnabled })),
 
   setRecordingState: (recordingState) => set({ recordingState }),
   setElapsedSeconds: (elapsedSeconds) => set({ elapsedSeconds }),
-  setIsPaused:       (isPaused)       => set({ isPaused }),
-  setStreams:        (streams)        => set(streams),
-  setMediaRecorder:  (mediaRecorder)  => set({ mediaRecorder }),
+  setIsPaused: (isPaused) => set({ isPaused }),
+  setStreams: (streams) => set(streams),
+  setMediaRecorder: (mediaRecorder) => set({ mediaRecorder }),
   setCompositeCleanup: (compositeCleanup) => set({ compositeCleanup }),
 
   setRecordedOutput: ({ blob, url, mimeType, resolution }) =>
-    set({ recordedBlob: blob, recordedUrl: url, recordedMimeType: mimeType, recordingResolution: resolution }),
+    set({
+      recordedBlob: blob,
+      recordedUrl: url,
+      recordedMimeType: mimeType,
+      recordingResolution: resolution,
+    }),
 
   setPermission: (key, value) =>
     set((s) => ({ permissions: { ...s.permissions, [key]: value } })),
 
-  addScreenshot:    (shot) => set((s) => ({ screenshots: [shot, ...s.screenshots] })),
-  removeScreenshot: (id)   => set((s) => ({ screenshots: s.screenshots.filter((sh) => sh.id !== id) })),
+  addScreenshot: (shot) =>
+    set((s) => ({ screenshots: [shot, ...s.screenshots] })),
+  removeScreenshot: (id) =>
+    set((s) => ({ screenshots: s.screenshots.filter((sh) => sh.id !== id) })),
 
   // Screenshot preview modal
-  openScreenshotPreview:  (id) => set({ screenshotPreviewId: id }),
-  closeScreenshotPreview: ()   => set({ screenshotPreviewId: null }),
+  openScreenshotPreview: (id) => set({ screenshotPreviewId: id }),
+  closeScreenshotPreview: () => set({ screenshotPreviewId: null }),
 
-  setUploadProgress: (uploadProgress)   => set({ uploadProgress }),
-  setUploadedRecord: (uploadedRecord)   => set({ uploadedRecord }),
-  setError:          (error)            => set({ error }),
-  clearError:        ()                 => set({ error: null }),
+  setUploadProgress: (uploadProgress) => set({ uploadProgress }),
+  setUploadedRecord: (uploadedRecord) => set({ uploadedRecord }),
+  setShareLink: (shareLink) => set({ shareLink }),
+  setError: (error) => set({ error }),
+  clearError: () => set({ error: null }),
 
   reset: () => {
     const { recordedUrl, screenshots, compositeCleanup } = get();
     if (recordedUrl) URL.revokeObjectURL(recordedUrl);
-    screenshots.forEach((s) => { if (s.url) URL.revokeObjectURL(s.url); });
+    screenshots.forEach((s) => {
+      if (s.url) URL.revokeObjectURL(s.url);
+    });
     compositeCleanup?.();
     set({ ...initialState });
   },
