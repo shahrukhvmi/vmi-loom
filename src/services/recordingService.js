@@ -35,7 +35,7 @@ export async function createCompositeStream(
   audioStream,
   options = {},
 ) {
-  const { overlayWidth = 560, overlayHeight = 420 } = options;
+  // overlayWidth/Height set after canvas size is known below
 
   // ── Screen video ──────────────────────────────────────────────────────────
   const screenVideo = document.createElement("video");
@@ -114,10 +114,12 @@ export async function createCompositeStream(
   let intervalId;
   let running = true;
 
-  const pad = 28;
+  // Dynamic size — 22% of shorter canvas dimension
+  const overlayWidth = Math.round(Math.min(canvasWidth, canvasHeight) * 0.22);
+  const overlayHeight = overlayWidth;
+  const pad = Math.round(canvasWidth * 0.02);
   const x = canvasWidth - overlayWidth - pad;
   const y = canvasHeight - overlayHeight - pad;
-  const radius = 20;
 
   function draw() {
     if (!running) return;
@@ -125,26 +127,51 @@ export async function createCompositeStream(
     // Draw screen
     ctx.drawImage(screenVideo, 0, 0, canvasWidth, canvasHeight);
 
-    // Camera PiP overlay
+    // Camera PiP — circular
+    const size = overlayWidth;
+    const cx = x + size / 2;
+    const cy = y + size / 2;
+    const r = size / 2;
+
+    // Drop shadow
     ctx.save();
-    ctx.shadowColor = "rgba(0,0,0,0.55)";
-    ctx.shadowBlur = 20;
-    ctx.shadowOffsetY = 4;
+    ctx.shadowColor = "rgba(0,0,0,0.5)";
+    ctx.shadowBlur = 24;
+    ctx.shadowOffsetY = 6;
     ctx.beginPath();
-    ctx.roundRect(x, y, overlayWidth, overlayHeight, radius);
-    ctx.clip();
-    ctx.shadowColor = "transparent";
-    ctx.translate(x + overlayWidth, y);
-    ctx.scale(-1, 1);
-    ctx.drawImage(cameraVideo, 0, 0, overlayWidth, overlayHeight);
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fillStyle = "#000";
+    ctx.fill();
     ctx.restore();
 
-    // Border ring
+    // Circular clip + mirrored camera (object-fit: cover)
     ctx.save();
-    ctx.strokeStyle = "rgba(255,255,255,0.22)";
-    ctx.lineWidth = 2.5;
     ctx.beginPath();
-    ctx.roundRect(x, y, overlayWidth, overlayHeight, radius);
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.clip();
+
+    // Cover fit — maintain aspect ratio, crop to fill circle
+    const vw = cameraVideo.videoWidth || size;
+    const vh = cameraVideo.videoHeight || size;
+    const scale = Math.max(size / vw, size / vh);
+    const dw = vw * scale;
+    const dh = vh * scale;
+    const dx = x + (size - dw) / 2;
+    const dy = y + (size - dh) / 2;
+
+    // Mirror horizontally
+    ctx.translate(x + size / 2, 0);
+    ctx.scale(-1, 1);
+    ctx.translate(-(x + size / 2), 0);
+    ctx.drawImage(cameraVideo, dx, dy, dw, dh);
+    ctx.restore();
+
+    // Purple ring border
+    ctx.save();
+    ctx.strokeStyle = "rgba(139,92,246,0.7)";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r - 2, 0, Math.PI * 2);
     ctx.stroke();
     ctx.restore();
   }

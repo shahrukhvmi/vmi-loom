@@ -2,22 +2,28 @@
  * Format seconds to MM:SS or HH:MM:SS
  */
 export function formatDuration(seconds) {
-  if (!seconds || isNaN(seconds)) return '00:00';
+  if (
+    seconds === null ||
+    seconds === undefined ||
+    isNaN(seconds) ||
+    !isFinite(seconds)
+  )
+    return "00:00";
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
   const s = Math.floor(seconds % 60);
   if (h > 0) {
-    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
   }
-  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
 /**
  * Format bytes to human-readable file size
  */
 export function formatFileSize(bytes) {
-  if (!bytes) return '0 B';
-  const units = ['B', 'KB', 'MB', 'GB'];
+  if (!bytes) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
   const i = Math.floor(Math.log(bytes) / Math.log(1024));
   return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
 }
@@ -29,7 +35,7 @@ export function getSupportedMimeType(mimeTypes) {
   for (const type of mimeTypes) {
     if (MediaRecorder.isTypeSupported(type)) return type;
   }
-  return '';
+  return "";
 }
 
 /**
@@ -57,7 +63,7 @@ export function getStreamResolution(stream) {
  */
 export function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
+  const a = document.createElement("a");
   a.href = url;
   a.download = filename;
   document.body.appendChild(a);
@@ -69,9 +75,9 @@ export function downloadBlob(blob, filename) {
 /**
  * Generate a timestamped filename
  */
-export function generateFilename(prefix = 'recording', ext = 'webm') {
+export function generateFilename(prefix = "recording", ext = "webm") {
   const now = new Date();
-  const ts = now.toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  const ts = now.toISOString().replace(/[:.]/g, "-").slice(0, 19);
   return `${prefix}-${ts}.${ext}`;
 }
 

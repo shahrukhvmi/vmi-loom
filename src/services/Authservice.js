@@ -37,6 +37,29 @@ export const videoService = {
 
   getVideo: (videoUuid) => api.get(`/v1/videos/${videoUuid}`),
 
+  getComments: (videoUuid) => api.get(`/v1/videos/${videoUuid}/comments`),
+
+  createComment: (videoUuid, guestName, comment, timestampSeconds) =>
+    api.post(`/v1/videos/${videoUuid}/comments`, {
+      guest_name: guestName,
+      comment,
+      timestamp_seconds: timestampSeconds,
+    }),
+
+  updateVideo: (videoUuid, data) => api.patch(`/v1/videos/${videoUuid}`, data),
+
+  deleteVideo: (videoUuid) => api.delete(`/v1/videos/${videoUuid}`),
+
+  getVideos: (page = 1, privacy = "", status = "") =>
+    api.get(`/v1/videos`, {
+      params: {
+        page,
+        per_page: 12,
+        ...(privacy ? { privacy } : {}),
+        ...(status ? { status } : {}),
+      },
+    }),
+
   uploadVideo: (uploadUrl, blob, mimeType, onProgress) => {
     return new Promise((resolve, reject) => {
       const formData = new FormData();

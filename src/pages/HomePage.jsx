@@ -8,6 +8,7 @@ import {
   ChevronRight,
   ImageIcon,
   LogOut,
+  Library,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useAuthStore } from "../context/authStore";
@@ -37,7 +38,7 @@ const MODES = [
   },
 ];
 
-export function HomePage() {
+export function HomePage({ onGoToLibrary }) {
   const { openLauncher, setMode } = useRecorderStore();
   const { clearAuth, user } = useAuthStore();
 
@@ -75,7 +76,7 @@ export function HomePage() {
             <div className="w-3 h-3 rounded-full bg-white/90" />
           </div>
           <span className="text-[16px] font-bold tracking-[-0.02em] text-[#1a1a2e]">
-            Recrd
+            Record
           </span>
         </div>
 
@@ -132,6 +133,14 @@ export function HomePage() {
               </div>
             )}
           </div>
+
+          <button
+            onClick={onGoToLibrary}
+            className="flex items-center gap-2 px-3.5 py-2 rounded-[10px] text-[13px]
+              text-[#555570] hover:bg-[#f8f8fa] hover:text-[#1a1a2e] transition-colors"
+          >
+            <Library size={15} /> Library
+          </button>
 
           <Button variant="primary" size="sm" onClick={openLauncher}>
             <span className="w-2 h-2 rounded-full bg-white/80" />

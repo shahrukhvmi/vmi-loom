@@ -78,7 +78,7 @@ export function AuthPage() {
             <div className="w-3.5 h-3.5 rounded-full bg-white/90" />
           </div>
           <span className="text-[18px] font-bold tracking-[-0.02em] text-[#1a1a2e]">
-            Recrd
+            Record
           </span>
         </div>
 
@@ -90,7 +90,7 @@ export function AuthPage() {
           <p className="text-[14px] text-[#8c8ca3] mt-1">
             {isRegister
               ? "Start recording in seconds"
-              : "Sign in to continue to Recrd"}
+              : "Sign in to continue to Record"}
           </p>
         </div>
 
@@ -185,7 +185,7 @@ export function AuthPage() {
       </div>
 
       <p className="mt-6 text-[12px] text-[#8c8ca3]">
-        Recrd · Browser-native screen recorder
+        Record · Browser-native screen recorder
       </p>
     </div>
   );

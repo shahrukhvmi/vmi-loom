@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Toaster } from "react-hot-toast";
 import { useRecorderStore } from "./context/recorderStore";
 import { useAuthStore } from "./context/authStore";
@@ -6,6 +7,7 @@ import { usePermissions } from "./hooks/usePermissions";
 import { AuthPage } from "./pages/AuthPage";
 import { HomePage } from "./pages/HomePage";
 import { PreviewPage } from "./pages/PreviewPage";
+import { LibraryPage } from "./pages/LibraryPage";
 import { SharePage } from "./pages/SharePage";
 import { RecordingLauncher } from "./components/launcher/RecordingLauncher";
 import { RecordingControls } from "./components/controls/RecordingControls";
@@ -13,10 +15,8 @@ import { CameraPreview } from "./components/controls/CameraPreview";
 import { ScreenshotPreviewModal } from "./components/screenshot/ScreenshotPreviewModal";
 import { RECORDING_STATE } from "./constants";
 
-// Wire axios interceptor to Zustand token
 setAuthInterceptor(() => useAuthStore.getState().token);
 
-// Read share UUID from URL — e.g. /share/019f4c9e-6685-71ee-8bf8-9089f61aa287
 function getShareUuid() {
   const match = window.location.pathname.match(/\/share\/([0-9a-f-]{36})/i);
   return match ? match[1] : null;
@@ -41,6 +41,8 @@ export default function App() {
   usePermissions();
   const { recordingState } = useRecorderStore();
   const { token } = useAuthStore();
+  const [view, setView] = useState("home"); // 'home' | 'library'
+  const [selectedVideo, setSelectedVideo] = useState(null); // server video
 
   const shareUuid = getShareUuid();
 
@@ -49,7 +51,6 @@ export default function App() {
     recordingState === RECORDING_STATE.UPLOADING ||
     recordingState === RECORDING_STATE.UPLOADED;
 
-  // Share page — no auth needed
   if (shareUuid) {
     return (
       <>
@@ -59,11 +60,34 @@ export default function App() {
     );
   }
 
+  const handleVideoSelect = (video) => {
+    setSelectedVideo({ uuid: video.uuid });
+    setView("video");
+  };
+
+  const handleBackToLibrary = () => {
+    setSelectedVideo(null);
+    setView("library");
+  };
+
   return (
     <>
       <Toaster position="top-center" toastOptions={TOAST_OPTS} />
 
-      {!token ? <AuthPage /> : isPreview ? <PreviewPage /> : <HomePage />}
+      {!token ? (
+        <AuthPage />
+      ) : isPreview ? (
+        <PreviewPage onGoToLibrary={() => setView("library")} />
+      ) : view === "library" ? (
+        <LibraryPage
+          onNewRecording={() => setView("home")}
+          onVideoSelect={handleVideoSelect}
+        />
+      ) : view === "video" && selectedVideo ? (
+        <PreviewPage serverVideo={selectedVideo} onBack={handleBackToLibrary} />
+      ) : (
+        <HomePage onGoToLibrary={() => setView("library")} />
+      )}
 
       <RecordingLauncher />
       <RecordingControls />

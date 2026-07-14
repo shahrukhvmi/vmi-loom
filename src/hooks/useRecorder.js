@@ -17,6 +17,8 @@ import { stopAllTracks, getStreamResolution } from "../utils";
 // their own hook instance with their own (empty) recorderRef.
 const _recorder = { current: null };
 const _chunks = { current: [] };
+const _camChunks = { current: [] }; // camera-only chunks for SCREEN_CAMERA
+const _camRecorder = { current: null };
 const _mime = { current: "" };
 const _finalized = { current: false };
 const _streams = {
@@ -103,6 +105,13 @@ export function useRecorder() {
       mimeType: mime,
       resolution: storeState.recordingResolution,
     });
+    // Clear streams from store so CameraPreview hides on preview page
+    store.setStreams({
+      screenStream: null,
+      cameraStream: null,
+      micStream: null,
+      combinedStream: null,
+    });
     store.setRecordingState(RECORDING_STATE.PREVIEW);
 
     // Auto-upload if we have an upload URL from the API
@@ -125,6 +134,24 @@ export function useRecorder() {
           store.setUploadProgress(100);
           store.setRecordingState(RECORDING_STATE.UPLOADED);
           store.setUploadedRecord({ uploadUid, videoUuid });
+
+          // Patch video with duration and size after upload
+          try {
+            const durationSeconds = Math.round(_count.current);
+            const sizeBytes = blob.size;
+            await videoService.updateVideo(videoUuid, {
+              duration_seconds: durationSeconds,
+              // size_bytes: sizeBytes,
+            });
+            console.log(
+              "[patch] duration:",
+              durationSeconds,
+              "size:",
+              sizeBytes,
+            );
+          } catch (e) {
+            console.warn("[patch] failed:", e?.response?.data || e.message);
+          }
 
           // Hit share API with the video uuid (with dashes)
           try {
@@ -235,14 +262,28 @@ export function useRecorder() {
         screenStream &&
         cameraStream
       ) {
-        const { combinedStream, cleanup } = await createCompositeStream(
-          screenStream,
-          cameraStream,
-          micStream,
-        );
-        recordStream = combinedStream;
-        _streams.current.compositeCleanup = cleanup;
-        store.setStreams({ combinedStream });
+        // Record screen and camera as SEPARATE streams — no canvas composite
+        // Camera stays recording even when tab switches
+        recordStream = new MediaStream([
+          ...screenStream.getVideoTracks(),
+          ...(micStream?.getAudioTracks() || []),
+        ]);
+
+        // Separate camera recorder
+        const camStream = new MediaStream([...cameraStream.getVideoTracks()]);
+        const camMime =
+          ["video/webm;codecs=vp9", "video/webm"].find((t) =>
+            MediaRecorder.isTypeSupported(t),
+          ) || "";
+        const camMr = camMime
+          ? new MediaRecorder(camStream, { mimeType: camMime })
+          : new MediaRecorder(camStream);
+        camMr.ondataavailable = (e) => {
+          if (e.data?.size > 0) _camChunks.current.push(e.data);
+        };
+        camMr.start(250);
+        _camRecorder.current = camMr;
+        console.log("[cam recorder] started:", camMr.state);
       } else if (mode === RECORDING_MODE.SCREEN && screenStream) {
         recordStream = new MediaStream([
           ...screenStream.getTracks(),
@@ -350,6 +391,12 @@ export function useRecorder() {
     try {
       if (mr && mr.state !== "inactive") mr.stop();
     } catch {}
+    const camMr2 = _camRecorder.current;
+    try {
+      if (camMr2 && camMr2.state !== "inactive") camMr2.stop();
+    } catch {}
+    _camRecorder.current = null;
+    _camChunks.current = [];
     const { screenStream, cameraStream, micStream, compositeCleanup } =
       _streams.current;
     compositeCleanup?.();
