@@ -11,10 +11,10 @@
  * preview modal is opened automatically.
  */
 
-import { useCallback } from 'react';
-import { useRecorderStore } from '../context/recorderStore';
-import { captureScreenshot } from '../services/recordingService';
-import { downloadBlob, generateFilename } from '../utils';
+import { useCallback } from "react";
+import { useRecorderStore } from "../context/recorderStore";
+import { captureScreenshot } from "../services/recordingService";
+import { downloadBlob, generateFilename } from "../utils";
 
 /* ── helpers ── */
 function blobToBase64(blob) {
@@ -31,80 +31,110 @@ function blobToBase64(blob) {
  */
 function showAreaSelector(fullBlob) {
   return new Promise((resolve, reject) => {
-    const img    = new Image();
+    const img = new Image();
     const objUrl = URL.createObjectURL(fullBlob);
-    img.src      = objUrl;
+    img.src = objUrl;
 
     img.onload = () => {
       URL.revokeObjectURL(objUrl);
 
-      // Full-screen overlay canvas
-      const canvas  = document.createElement('canvas');
-      canvas.width  = window.screen.width;
-      canvas.height = window.screen.height;
+      // Full-screen overlay canvas — match viewport exactly
+      const canvas = document.createElement("canvas");
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
       Object.assign(canvas.style, {
-        position: 'fixed', inset: '0', zIndex: '2147483647',
-        cursor: 'crosshair', display: 'block',
+        position: "fixed",
+        inset: "0",
+        zIndex: "2147483647",
+        cursor: "crosshair",
+        display: "block",
+        width: window.innerWidth + "px",
+        height: window.innerHeight + "px",
       });
+      const ctx = canvas.getContext("2d");
       document.body.appendChild(canvas);
-
-      const ctx = canvas.getContext('2d');
 
       // Draw the captured screenshot as background
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
       // Dark overlay
-      ctx.fillStyle = 'rgba(0,0,0,0.45)';
+      ctx.fillStyle = "rgba(0,0,0,0.45)";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       // Instructions
-      ctx.fillStyle = 'rgba(255,255,255,0.92)';
-      ctx.font      = 'bold 15px Inter, system-ui, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('Drag to select area  ·  Press Esc to cancel', canvas.width / 2, canvas.height / 2);
+      ctx.fillStyle = "rgba(255,255,255,0.92)";
+      ctx.font = "bold 15px Inter, system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(
+        "Drag to select area  ·  Press Esc to cancel",
+        canvas.width / 2,
+        canvas.height / 2,
+      );
 
-      let startX = 0, startY = 0, dragging = false;
+      let startX = 0,
+        startY = 0,
+        dragging = false;
+
+      // Scale factors from canvas coords to image source coords
+      const imgScaleX = img.naturalWidth / canvas.width;
+      const imgScaleY = img.naturalHeight / canvas.height;
 
       const redraw = (x, y, w, h) => {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = 'rgba(0,0,0,0.45)';
+        ctx.fillStyle = "rgba(0,0,0,0.45)";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
         if (w > 0 && h > 0) {
           // Clear selected area (show original bright)
           ctx.clearRect(x, y, w, h);
-          ctx.drawImage(img, x, y, w, h, x, y, w, h);
+          // Map canvas coords to source image coords for proper cropping
+          ctx.drawImage(
+            img,
+            x * imgScaleX,
+            y * imgScaleY,
+            w * imgScaleX,
+            h * imgScaleY,
+            x,
+            y,
+            w,
+            h,
+          );
 
           // Dashed selection border
-          ctx.strokeStyle = '#7c3aed';
-          ctx.lineWidth   = 2;
+          ctx.strokeStyle = "#7c3aed";
+          ctx.lineWidth = 2;
           ctx.setLineDash([6, 3]);
           ctx.strokeRect(x, y, w, h);
 
           // Corner handles
-          ctx.fillStyle = '#7c3aed';
-          [[x,y],[x+w,y],[x,y+h],[x+w,y+h]].forEach(([cx,cy]) => {
+          ctx.fillStyle = "#7c3aed";
+          [
+            [x, y],
+            [x + w, y],
+            [x, y + h],
+            [x + w, y + h],
+          ].forEach(([cx, cy]) => {
             ctx.beginPath();
-            ctx.arc(cx, cy, 5, 0, Math.PI*2);
+            ctx.arc(cx, cy, 5, 0, Math.PI * 2);
             ctx.fill();
           });
 
           // Size label
           ctx.setLineDash([]);
-          ctx.fillStyle = '#7c3aed';
+          ctx.fillStyle = "#7c3aed";
           ctx.fillRect(x, y - 24, 90, 22);
-          ctx.fillStyle = '#fff';
-          ctx.font      = '12px Inter, system-ui, sans-serif';
-          ctx.textAlign = 'left';
+          ctx.fillStyle = "#fff";
+          ctx.font = "12px Inter, system-ui, sans-serif";
+          ctx.textAlign = "left";
           ctx.fillText(`${Math.round(w)} × ${Math.round(h)}`, x + 6, y - 8);
         }
       };
 
       const onDown = (e) => {
         dragging = true;
-        startX   = e.clientX;
-        startY   = e.clientY;
+        startX = e.clientX;
+        startY = e.clientY;
       };
       const onMove = (e) => {
         if (!dragging) return;
@@ -124,66 +154,80 @@ function showAreaSelector(fullBlob) {
         document.body.removeChild(canvas);
 
         if (w < 10 || h < 10) {
-          reject(new Error('Selection too small'));
+          reject(new Error("Selection too small"));
           return;
         }
 
         // Crop the original full image to the selected rectangle
-        // Scale from screen px to actual image px
-        const scaleX = img.naturalWidth  / window.screen.width;
-        const scaleY = img.naturalHeight / window.screen.height;
+        // Scale from viewport px to actual image px
+        const scaleX = img.naturalWidth / window.innerWidth;
+        const scaleY = img.naturalHeight / window.innerHeight;
 
-        const crop = document.createElement('canvas');
-        crop.width  = Math.round(w * scaleX);
+        const crop = document.createElement("canvas");
+        crop.width = Math.round(w * scaleX);
         crop.height = Math.round(h * scaleY);
-        crop.getContext('2d').drawImage(
-          img,
-          x * scaleX, y * scaleY, crop.width, crop.height,
-          0, 0, crop.width, crop.height
-        );
+        crop
+          .getContext("2d")
+          .drawImage(
+            img,
+            x * scaleX,
+            y * scaleY,
+            crop.width,
+            crop.height,
+            0,
+            0,
+            crop.width,
+            crop.height,
+          );
         crop.toBlob((blob) => {
           if (blob) resolve(blob);
-          else reject(new Error('Crop failed'));
-        }, 'image/png');
+          else reject(new Error("Crop failed"));
+        }, "image/png");
       };
 
       const onKey = (e) => {
-        if (e.key === 'Escape') {
+        if (e.key === "Escape") {
           document.body.removeChild(canvas);
-          document.removeEventListener('keydown', onKey);
-          reject(new Error('Cancelled'));
+          document.removeEventListener("keydown", onKey);
+          reject(new Error("Cancelled"));
         }
       };
 
-      canvas.addEventListener('mousedown', onDown);
-      canvas.addEventListener('mousemove', onMove);
-      canvas.addEventListener('mouseup',   onUp);
-      document.addEventListener('keydown', onKey);
+      canvas.addEventListener("mousedown", onDown);
+      canvas.addEventListener("mousemove", onMove);
+      canvas.addEventListener("mouseup", onUp);
+      document.addEventListener("keydown", onKey);
     };
 
-    img.onerror = () => reject(new Error('Image load failed'));
+    img.onerror = () => reject(new Error("Image load failed"));
   });
 }
 
 export function useScreenshot() {
   const store = useRecorderStore();
   const {
-    screenStream, cameraStream, combinedStream,
-    addScreenshot, openScreenshotPreview,
+    screenStream,
+    cameraStream,
+    combinedStream,
+    addScreenshot,
+    openScreenshotPreview,
   } = store;
 
-  const _save = useCallback((blob) => {
-    const url = URL.createObjectURL(blob);
-    const id  = `screenshot-${Date.now()}`;
-    addScreenshot({ id, url, blob, capturedAt: new Date() });
-    openScreenshotPreview(id);       // ← auto-open preview modal
-    return { id, url, blob };
-  }, [addScreenshot, openScreenshotPreview]);
+  const _save = useCallback(
+    (blob) => {
+      const url = URL.createObjectURL(blob);
+      const id = `screenshot-${Date.now()}`;
+      addScreenshot({ id, url, blob, capturedAt: new Date() });
+      openScreenshotPreview(id); // ← auto-open preview modal
+      return { id, url, blob };
+    },
+    [addScreenshot, openScreenshotPreview],
+  );
 
   /** Capture from active recording stream (during recording) */
   const captureFromActiveStream = useCallback(async () => {
     const source = combinedStream || screenStream || cameraStream;
-    if (!source) throw new Error('No active stream to capture from.');
+    if (!source) throw new Error("No active stream to capture from.");
     const blob = await captureScreenshot(source);
     return _save(blob);
   }, [screenStream, cameraStream, combinedStream, _save]);
@@ -191,12 +235,15 @@ export function useScreenshot() {
   /** Capture full screen (opens share picker, grabs one frame, stops) */
   const captureFullScreen = useCallback(async () => {
     const stream = await navigator.mediaDevices.getDisplayMedia({
-      video: { cursor: 'always', frameRate: { ideal: 1 } },
+      video: { cursor: "always", frameRate: { ideal: 1 } },
       audio: false,
     });
     let blob;
-    try   { blob = await captureScreenshot(stream); }
-    finally { stream.getTracks().forEach((t) => t.stop()); }
+    try {
+      blob = await captureScreenshot(stream);
+    } finally {
+      stream.getTracks().forEach((t) => t.stop());
+    }
     return _save(blob);
   }, [_save]);
 
@@ -208,12 +255,15 @@ export function useScreenshot() {
    */
   const captureArea = useCallback(async () => {
     const stream = await navigator.mediaDevices.getDisplayMedia({
-      video: { cursor: 'never', frameRate: { ideal: 1 } },
+      video: { cursor: "never", frameRate: { ideal: 1 } },
       audio: false,
     });
     let fullBlob;
-    try   { fullBlob = await captureScreenshot(stream); }
-    finally { stream.getTracks().forEach((t) => t.stop()); }
+    try {
+      fullBlob = await captureScreenshot(stream);
+    } finally {
+      stream.getTracks().forEach((t) => t.stop());
+    }
 
     // Show selection overlay — may reject if user presses Esc
     const croppedBlob = await showAreaSelector(fullBlob);
@@ -224,16 +274,18 @@ export function useScreenshot() {
   const captureNewScreenshot = captureFullScreen;
 
   const downloadScreenshot = useCallback((shot) => {
-    downloadBlob(shot.blob, generateFilename('screenshot', 'png'));
+    downloadBlob(shot.blob, generateFilename("screenshot", "png"));
   }, []);
 
   const copyScreenshot = useCallback(async (shot) => {
     try {
       await navigator.clipboard.write([
-        new ClipboardItem({ 'image/png': shot.blob })
+        new ClipboardItem({ "image/png": shot.blob }),
       ]);
       return true;
-    } catch { return false; }
+    } catch {
+      return false;
+    }
   }, []);
 
   return {

@@ -262,28 +262,15 @@ export function useRecorder() {
         screenStream &&
         cameraStream
       ) {
-        // Record screen and camera as SEPARATE streams — no canvas composite
-        // Camera stays recording even when tab switches
-        recordStream = new MediaStream([
-          ...screenStream.getVideoTracks(),
-          ...(micStream?.getAudioTracks() || []),
-        ]);
-
-        // Separate camera recorder
-        const camStream = new MediaStream([...cameraStream.getVideoTracks()]);
-        const camMime =
-          ["video/webm;codecs=vp9", "video/webm"].find((t) =>
-            MediaRecorder.isTypeSupported(t),
-          ) || "";
-        const camMr = camMime
-          ? new MediaRecorder(camStream, { mimeType: camMime })
-          : new MediaRecorder(camStream);
-        camMr.ondataavailable = (e) => {
-          if (e.data?.size > 0) _camChunks.current.push(e.data);
-        };
-        camMr.start(250);
-        _camRecorder.current = camMr;
-        console.log("[cam recorder] started:", camMr.state);
+        // Canvas composite — screen + camera circle overlay merged into one stream
+        const { combinedStream, cleanup } = await createCompositeStream(
+          screenStream,
+          cameraStream,
+          micStream,
+        );
+        recordStream = combinedStream;
+        _streams.current.compositeCleanup = cleanup;
+        store.setStreams({ combinedStream });
       } else if (mode === RECORDING_MODE.SCREEN && screenStream) {
         recordStream = new MediaStream([
           ...screenStream.getTracks(),
